@@ -1,0 +1,38 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+env/
+.venv/
+venv/
+venv*/
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+
+# Secrets and env
+.env
+.env.local
+.env.*.local
+*.secret
+
+# Data / large files (DO NOT push large datasets unless intentional)
+data/vectorstore/
+data/*.bin
+data/*.b64
+data/*.sqlite
+data/agent_cache.sqlite
+data/FINAL_with_rag.csv
+data/*.parquet
+out.bin
+*.log
+
+# Images / plots (optional)
+*.png
+*.jpg
+
+# Git LFS placeholder (if you later use LFS)
+*.lfs

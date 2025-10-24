@@ -1,0 +1,581 @@
+{
+  "player": {
+    "original_column": "player",
+    "description": "Player full name.",
+    "example_values": [
+      "aaron connolly",
+      "aaron cresswell",
+      "aaron hickey",
+      "aaron lennon",
+      "aaron leya iseka"
+    ]
+  },
+  "season": {
+    "original_column": "season",
+    "description": "Season label (e.g., 2022/23).",
+    "example_values": [
+      "20-21",
+      "21-22",
+      "22-23",
+      "23-24",
+      "24-25"
+    ]
+  },
+  "squad": {
+    "original_column": "squad",
+    "description": "Club / squad name.",
+    "example_values": [
+      "brighton",
+      "west ham",
+      "bologna",
+      "brentford",
+      "burnley"
+    ]
+  },
+  "pos": {
+    "original_column": "pos",
+    "description": "Player position (e.g., ST, CM, LB).",
+    "example_values": [
+      "FW",
+      "DF",
+      "MF",
+      "AM",
+      "LM"
+    ]
+  },
+  "nation": {
+    "original_column": "nation",
+    "description": "Player nationality.",
+    "example_values": [
+      "Ireland",
+      "England",
+      "Scotland",
+      "Belgium",
+      "Wales"
+    ]
+  },
+  "playing_time_90s": {
+    "original_column": "playing_time_90s",
+    "description": "Minutes played converted to 90-minute equivalents.",
+    "example_values": [
+      "8.8",
+      "1.7",
+      "35.2",
+      "30.3",
+      "24.8"
+    ]
+  },
+  "playing_time_min": {
+    "original_column": "playing_time_min",
+    "description": "Total minutes played.",
+    "example_values": [
+      "791",
+      "156",
+      "3170",
+      "2726",
+      "2235"
+    ]
+  },
+  "playing_time_starts": {
+    "original_column": "playing_time_starts",
+    "description": "Number of matches the player started.",
+    "example_values": [
+      "9",
+      "1",
+      "36",
+      "31",
+      "24"
+    ]
+  },
+  "goals": {
+    "original_column": "performance_gls",
+    "description": "Number of goals.",
+    "example_values": [
+      "2",
+      "0",
+      "5",
+      "4",
+      "1"
+    ]
+  },
+  "assists": {
+    "original_column": "performance_ast",
+    "description": "Number of assists.",
+    "example_values": [
+      "1",
+      "0",
+      "8",
+      "3",
+      "4"
+    ]
+  },
+  "goals_assists": {
+    "original_column": "performance_g+a",
+    "description": "Goals + assists combined.",
+    "example_values": [
+      "3",
+      "0",
+      "8",
+      "5",
+      "1"
+    ]
+  },
+  "goals_no_pk": {
+    "original_column": "performance_g-pk",
+    "description": "",
+    "example_values": [
+      "2",
+      "0",
+      "5",
+      "1",
+      "4"
+    ]
+  },
+  "penalties_taken": {
+    "original_column": "performance_pkatt",
+    "description": "",
+    "example_values": [
+      "0",
+      "3",
+      "1",
+      "2",
+      "5"
+    ]
+  },
+  "yellow_cards": {
+    "original_column": "performance_crdy",
+    "description": "",
+    "example_values": [
+      "0",
+      "3",
+      "1",
+      "2",
+      "7"
+    ]
+  },
+  "red_cards": {
+    "original_column": "performance_crdr",
+    "description": "",
+    "example_values": [
+      "0",
+      "1",
+      "2",
+      "3"
+    ]
+  },
+  "xg": {
+    "original_column": "expected_xg",
+    "description": "",
+    "example_values": [
+      "4.0",
+      "0.4",
+      "1.0",
+      "1.1",
+      "0.3"
+    ]
+  },
+  "npxg": {
+    "original_column": "expected_npxg",
+    "description": "",
+    "example_values": [
+      "4.0",
+      "0.4",
+      "1.0",
+      "1.1",
+      "0.3"
+    ]
+  },
+  "xag": {
+    "original_column": "expected_xag",
+    "description": "",
+    "example_values": [
+      "0.2",
+      "0.1",
+      "6.5",
+      "3.2",
+      "3.7"
+    ]
+  },
+  "npxg_xag": {
+    "original_column": "expected_npxg+xag",
+    "description": "",
+    "example_values": [
+      "4.2",
+      "0.5",
+      "7.5",
+      "4.0",
+      "0.4"
+    ]
+  },
+  "progressive_carries": {
+    "original_column": "progression_prgc",
+    "description": "",
+    "example_values": [
+      "12",
+      "3",
+      "35",
+      "54",
+      "4"
+    ]
+  },
+  "progressive_passes": {
+    "original_column": "progression_prgp",
+    "description": "",
+    "example_values": [
+      "4",
+      "1",
+      "162",
+      "186",
+      "145"
+    ]
+  },
+  "progressive_received": {
+    "original_column": "progression_prgr",
+    "description": "",
+    "example_values": [
+      "58",
+      "7",
+      "96",
+      "99",
+      "82"
+    ]
+  },
+  "goals_per_90": {
+    "original_column": "per_90_minutes_gls",
+    "description": "",
+    "example_values": [
+      "0.23",
+      "0.0",
+      "0.07",
+      "0.16",
+      "0.12"
+    ]
+  },
+  "assists_per_90": {
+    "original_column": "per_90_minutes_ast",
+    "description": "",
+    "example_values": [
+      "0.11",
+      "0.0",
+      "0.23",
+      "0.1",
+      "0.04"
+    ]
+  },
+  "goals_assists_per_90": {
+    "original_column": "per_90_minutes_g+a",
+    "description": "",
+    "example_values": [
+      "0.34",
+      "0.0",
+      "0.23",
+      "0.17",
+      "0.04"
+    ]
+  },
+  "goals_no_pk_per_90": {
+    "original_column": "per_90_minutes_g-pk",
+    "description": "",
+    "example_values": [
+      "0.23",
+      "0.0",
+      "0.07",
+      "0.16",
+      "0.12"
+    ]
+  },
+  "goals_assists_no_pk_per_90": {
+    "original_column": "per_90_minutes_g+a-pk",
+    "description": "",
+    "example_values": [
+      "0.34",
+      "0.0",
+      "0.23",
+      "0.17",
+      "0.04"
+    ]
+  },
+  "xg_per_90": {
+    "original_column": "per_90_minutes_xg",
+    "description": "",
+    "example_values": [
+      "0.45",
+      "0.21",
+      "0.03",
+      "0.04",
+      "0.01"
+    ]
+  },
+  "xag_per_90": {
+    "original_column": "per_90_minutes_xag",
+    "description": "",
+    "example_values": [
+      "0.02",
+      "0.06",
+      "0.18",
+      "0.1",
+      "0.15"
+    ]
+  },
+  "xg_xag_per_90": {
+    "original_column": "per_90_minutes_xg+xag",
+    "description": "",
+    "example_values": [
+      "0.48",
+      "0.26",
+      "0.21",
+      "0.14",
+      "0.16"
+    ]
+  },
+  "npxg_per_90": {
+    "original_column": "per_90_minutes_npxg",
+    "description": "",
+    "example_values": [
+      "0.45",
+      "0.21",
+      "0.03",
+      "0.04",
+      "0.01"
+    ]
+  },
+  "npxg_xag_per_90": {
+    "original_column": "per_90_minutes_npxg+xag",
+    "description": "",
+    "example_values": [
+      "0.48",
+      "0.26",
+      "0.21",
+      "0.14",
+      "0.16"
+    ]
+  },
+  "market_value_24_25": {
+    "original_column": "market_value",
+    "description": "Market value for 2024/25 season (EUR).",
+    "example_values": [
+      "700000.0",
+      "22000000.0",
+      "6500000.0",
+      "12000000.0",
+      "10000000.0"
+    ]
+  },
+  "gross_p_w_eur": {
+    "original_column": "gross_p/w_(eur)",
+    "description": "",
+    "example_values": [
+      "23077",
+      "50000",
+      "59600",
+      "11154",
+      "70000"
+    ]
+  },
+  "gross_p_y_eur": {
+    "original_column": "gross_p/y_(eur)",
+    "description": "",
+    "example_values": [
+      "1200004",
+      "2600000",
+      "3099200",
+      "580008",
+      "3640000"
+    ]
+  },
+  "adj_gross_eur": {
+    "original_column": "adj._gross_(eur)",
+    "description": "",
+    "example_values": [
+      "1383051.0",
+      "1281528.0",
+      "2996610.0",
+      "2776643.0",
+      "2600000.0"
+    ]
+  },
+  "comp": {
+    "original_column": "comp",
+    "description": "",
+    "example_values": [
+      "eng Premier League",
+      "it Serie A",
+      "fr Ligue 1",
+      "de Bundesliga",
+      "es La Liga"
+    ]
+  },
+  "age_stats": {
+    "original_column": "age_stats",
+    "description": "",
+    "example_values": [
+      "20.0",
+      "21.0",
+      "30.0",
+      "31.0",
+      "32.0"
+    ]
+  },
+  "born": {
+    "original_column": "born",
+    "description": "",
+    "example_values": [
+      "2000.0",
+      "1989.0",
+      "2002.0",
+      "1987.0",
+      "1997.0"
+    ]
+  },
+  "playing_time_mp": {
+    "original_column": "playing_time_mp",
+    "description": "",
+    "example_values": [
+      "17.0",
+      "4.0",
+      "36.0",
+      "31.0",
+      "28.0"
+    ]
+  },
+  "performance_pk": {
+    "original_column": "performance_pk",
+    "description": "",
+    "example_values": [
+      "0",
+      "2",
+      "1",
+      "4",
+      "3"
+    ]
+  },
+  "years_remaining": {
+    "original_column": "years_remaining",
+    "description": "",
+    "example_values": [
+      "1.0",
+      "7.0",
+      "2.0",
+      "4.0",
+      "5.0"
+    ]
+  },
+  "gross_remaining_eur": {
+    "original_column": "gross_remaining_(eur)",
+    "description": "",
+    "example_values": [
+      "3099218.0",
+      "39050153.0",
+      "2560000.0",
+      "3600000.0",
+      "1300000.0"
+    ]
+  },
+  "status": {
+    "original_column": "status",
+    "description": "",
+    "example_values": [
+      "Reserve",
+      "Starter"
+    ]
+  },
+  "performance_score": {
+    "original_column": "performance_score",
+    "description": "",
+    "example_values": [
+      "1.124952417582566",
+      "0.08411805915530324",
+      "11.12531450415603",
+      "9.483128460912761",
+      "7.707832358134106"
+    ]
+  },
+  "rating_10": {
+    "original_column": "rating_10",
+    "description": "",
+    "example_values": [
+      "4.0",
+      "0.3",
+      "10.0",
+      "8.5",
+      "6.9"
+    ]
+  },
+  "value_score": {
+    "original_column": "value_score",
+    "description": "",
+    "example_values": [
+      "13.45883704259595",
+      "16.90655305677713",
+      "15.68731288871201",
+      "16.3004172910856",
+      "16.11809575095831"
+    ]
+  },
+  "value_10": {
+    "original_column": "value_10",
+    "description": "",
+    "example_values": [
+      "2.8",
+      "7.8",
+      "6.1",
+      "6.9",
+      "6.7"
+    ]
+  },
+  "transfer_status": {
+    "original_column": "transfer_status",
+    "description": "",
+    "example_values": [
+      "0",
+      "2",
+      "1"
+    ]
+  },
+  "market_value_lag": {
+    "original_column": "market_value_lag",
+    "description": "",
+    "example_values": [
+      "0.0",
+      "67497.37",
+      "964193.92",
+      "795359.16",
+      "626261.38"
+    ]
+  },
+  "homegrown_flag": {
+    "original_column": "homegrown_flag",
+    "description": "",
+    "example_values": [
+      "1",
+      "0"
+    ]
+  },
+  "low_paid_flag": {
+    "original_column": "low_paid_flag",
+    "description": "",
+    "example_values": [
+      "1",
+      "0"
+    ]
+  },
+  "proxy_market_value": {
+    "original_column": "proxy_market_value",
+    "description": "",
+    "example_values": [
+      "67497.37",
+      "4806.76",
+      "964193.92",
+      "795359.16",
+      "626261.38"
+    ]
+  },
+  "homegrown_low_paid_flag": {
+    "original_column": "homegrown_low_paid_flag",
+    "description": "",
+    "example_values": [
+      "1",
+      "0"
+    ]
+  }
+}
