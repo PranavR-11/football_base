@@ -639,6 +639,7 @@ CONTEXT = {
     "last_hits": None,
     "history": [],
     "pending_disambig": None
+
 }
 MAX_HISTORY = int(os.getenv("MAX_HISTORY", "12"))
 
@@ -795,7 +796,9 @@ def present_disambiguation_options(options: List[Dict[str, Any]], original_text:
 
 def resolve_pending_disambiguation(user_reply: str) -> Optional[str]:
     """If CONTEXT has 'pending_disambig', try to match user_reply to one of the options."""
+    dbg("Reached disamb - resolve pending")
     pd = CONTEXT.get('pending_disambig')
+    dbg("pd:", pd)
     if not pd:
         return None
     opts = pd.get("options", [])
@@ -823,7 +826,12 @@ def resolve_pending_disambiguation(user_reply: str) -> Optional[str]:
             dbg("Detected new question pattern: %s - cancelling disambiguation", pattern)
             CONTEXT.pop('pending_disambig', None)
             return "CANCELLED"
-
+    original_text = pd.get('original_text')
+    dbg("original_text:", original_text)
+    if "compare" in original_text:
+        dbg("handling comparing: ", original_text + ' ' + user_reply)
+        CONTEXT.pop('pending_disambig', None)
+        handle_input(original_text + ' ' + user_reply)
     # Pattern 2: Check if user is asking about a DIFFERENT player using RAG
     # Only do this if the input is longer than a simple number/selection
     if len(s.split()) >= 2 and not re.fullmatch(r"\d+", s):
@@ -859,6 +867,7 @@ def resolve_pending_disambiguation(user_reply: str) -> Optional[str]:
     # fuzzy match
     names = [normalize_name(o.get("player") or o.get("title") or o.get("candidate") or "").strip() for o in opts]
     close = difflib.get_close_matches(s, names, n=1, cutoff=0.6)
+    dbg("fetching close matches")
     if close:
         for o in opts:
             nm = normalize_name(o.get("player") or o.get("title") or o.get("candidate") or "").strip()
@@ -976,20 +985,20 @@ def parse_intent_with_llm(query: str) -> Dict[str, Any]:
         dbg("parse_intent_with_llm fallback=%s", parsed)
 
     # If no players found by LLM, try heuristics
-    if not parsed.get("players"):
-        heur_candidates = extract_candidate_names_from_text(query)
-        dbg("Heuristic name candidates: %s", heur_candidates)
-        if heur_candidates:
-            hits = canonicalize_with_hits(heur_candidates, max_results=6)
-            dbg("canonicalize_with_hits => %s", hits[:6])
-            if hits:
-                high = [h for h in hits if float(h.get("score", 0.0)) >= TOP_RAG_MIN_SCORE]
-                if len(high) == 1:
-                    parsed["players"] = [high[0]["player"]]
-                elif len(hits) == 1 and float(hits[0].get("score", 0.0)) >= 0.45:
-                    parsed["players"] = [hits[0]["player"]]
-                else:
-                    parsed["ambiguous_players"] = hits
+    # if not parsed.get("players"):
+    #     heur_candidates = extract_candidate_names_from_text(query)
+    #     dbg("Heuristic name candidates: %s", heur_candidates)
+    #     if heur_candidates:
+    #         hits = canonicalize_with_hits(heur_candidates, max_results=6)
+    #         dbg("canonicalize_with_hits => %s", hits[:6])
+    #         if hits:
+    #             high = [h for h in hits if float(h.get("score", 0.0)) >= TOP_RAG_MIN_SCORE]
+    #             if len(high) == 1:
+    #                 parsed["players"] = [high[0]["player"]]
+    #             elif len(hits) == 1 and float(hits[0].get("score", 0.0)) >= 0.45:
+    #                 parsed["players"] = [hits[0]["player"]]
+    #             else:
+    #                 parsed["ambiguous_players"] = hits
     return parsed
 
 # ---------------- Metric defaults by position ----------------
@@ -1583,6 +1592,7 @@ def handle_input(text: str):
     # --- handle pending disambiguation from previous turn ---
     pd = CONTEXT.get('pending_disambig')
     if pd:
+        dbg("previous context detected, continuing validation")
         chosen = resolve_pending_disambiguation(text)
         if chosen == "CANCELLED":
             # User wants to start a new query - clear disambiguation and proceed normally
