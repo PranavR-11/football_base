@@ -1,1696 +1,427 @@
-# # mcp/tools.py
-# import os
-# import pickle
-# import math
-# import re
-# import base64
-# import io
-# from dotenv import load_dotenv
-# import pandas as pd
-# from typing import List, Dict, Any, Optional
-
-# load_dotenv()
-
-# DATA_CSV = os.getenv("DATA_PATH", "./data/FINAL_with_rag.csv")
-# VECTOR_DIR = os.getenv("VECTORSTORE_DIR", "./data/vectorstore")
-# EMB_MODEL = os.getenv("OPENAI_EMBED_MODEL", "text-embedding-3-small")
-# OPENAI_KEY = os.getenv("OPENAI_API_KEY")
-# K_DEFAULT = int(os.getenv("K_DEFAULT", "5"))
-# DEFAULT_SEASONS_BACK = int(os.getenv("DEFAULT_SEASONS_BACK", "5"))
-
-# def _ensure_openai():
-#     try:
-#         from openai import OpenAI
-#         return OpenAI(api_key=OPENAI_KEY)
-#     except Exception as e:
-#         raise ImportError("Install openai>=1.0.0 and set OPENAI_API_KEY in .env. Err: " + str(e))
-
-# def _ensure_faiss():
-#     try:
-#         import faiss
-#         return faiss
-#     except Exception as e:
-#         raise ImportError("Install faiss-cpu (pip install faiss-cpu). Err: " + str(e))
-
-# def _load_meta_df():
-#     if not os.path.exists(DATA_CSV):
-#         raise RuntimeError(f"CSV not found at {DATA_CSV}")
-#     df = pd.read_csv(DATA_CSV)
-#     # normalize rag_summary column if present
-#     if "rag_summary" in df.columns:
-#         df["rag_summary"] = df["rag_summary"].astype(str).fillna("")
-#     return df
-
-# def _load_index_and_meta():
-#     faiss = _ensure_faiss()
-#     idx_path = os.path.join(VECTOR_DIR, "index.faiss")
-#     meta_path = os.path.join(VECTOR_DIR, "metadata.pkl")
-#     if not os.path.exists(idx_path) or not os.path.exists(meta_path):
-#         raise RuntimeError("FAISS index or metadata not found. Run scripts/batch_embed.py first.")
-#     index = faiss.read_index(idx_path)
-#     with open(meta_path, "rb") as f:
-#         df = pickle.load(f)
-#     return faiss, index, df
-
-# def get_schema() -> List[str]:
-#     """
-#     Return the available columns in the canonical CSV (if present).
-#     This is used by agents to map user metric tokens to real dataset columns.
-#     """
-#     if not os.path.exists(DATA_CSV):
-#         return []
-#     try:
-#         df = pd.read_csv(DATA_CSV, nrows=1)
-#         return list(df.columns)
-#     except Exception:
-#         return []
-
-# def search_player(query: str, k: int = K_DEFAULT) -> List[Dict[str, Any]]:
-#     """Semantic search using embeddings + FAISS index; returns top-k hits with rag_summary snippet."""
-#     if not query:
-#         return []
-#     try:
-#         client = _ensure_openai()
-#         faiss = _ensure_faiss()
-#         _, index, df = _load_index_and_meta()
-#     except Exception as e:
-#         # if embeddings/index not available, fallback to simple textual substring match in CSV
-#         try:
-#             df = _load_meta_df()
-#             matches = []
-#             q = str(query).lower()
-#             for i, row in df.iterrows():
-#                 score = 0.0
-#                 txt = " ".join([str(row.get(c, "") or "") for c in ("player", "rag_summary", "season")])
-#                 if q in txt.lower():
-#                     score = 1.0
-#                 if score > 0:
-#                     matches.append({"score": float(score), "idx": int(i), "player": row.get("player"), "season": row.get("season"), "rag_summary": str(row.get("rag_summary"))[:1000]})
-#             return sorted(matches, key=lambda r: r["score"], reverse=True)[:k]
-#         except Exception as e2:
-#             raise RuntimeError("Search unavailable: " + str(e2))
-
-#     resp = client.embeddings.create(model=EMB_MODEL, input=[query])
-#     emb = resp.data[0]["embedding"] if isinstance(resp.data[0], dict) else getattr(resp.data[0], "embedding")
-#     import numpy as np
-#     vec = np.array(emb, dtype="float32").reshape(1, -1)
-#     faiss.normalize_L2(vec)
-#     D, I = index.search(vec, k)
-#     results = []
-#     for score, idx in zip(D[0].tolist(), I[0].tolist()):
-#         if idx < 0:
-#             continue
-#         row = df.iloc[idx]
-#         results.append(
-#             {
-#                 "score": float(score),
-#                 "idx": int(idx),
-#                 "player": row.get("player"),
-#                 "season": row.get("season"),
-#                 "rag_summary": str(row.get("rag_summary"))[:1000],
-#             }
-#         )
-#     return results
-
-# # ------- helper: robust season -> year parser -------
-# def season_to_year(s):
-#     """
-#     Try to convert season like "2021/22", "2021-22", "22/23", "2022" -> int year (use the later year).
-#     Return None if not parsable.
-#     """
-#     try:
-#         if s is None:
-#             return None
-#         s = str(s)
-#         parts = re.findall(r"\d{2,4}", s)
-#         if not parts:
-#             try:
-#                 v = int(float(s))
-#                 return v
-#             except Exception:
-#                 return None
-#         y = parts[-1]
-#         if len(y) == 2:
-#             return 2000 + int(y)
-#         return int(y)
-#     except Exception:
-#         return None
-
-# # ------- aggregate_player_stat (robust; default 5 seasons) -------
-# def aggregate_player_stat(
-#     player_name: str,
-#     stat: str = "playing_time_starts",
-#     seasons_back: int = DEFAULT_SEASONS_BACK,
-#     player_col: str = "player",
-#     season_col: str = "season",
-# ) -> Dict[str, Any]:
-#     df = _load_meta_df().copy()
-#     if season_col not in df.columns:
-#         raise RuntimeError(f"Season column '{season_col}' not found in CSV")
-
-#     df["_season_year"] = df[season_col].apply(season_to_year)
-#     df["_player_lc"] = df[player_col].astype(str).str.strip().str.lower()
-#     mask = df["_player_lc"] == player_name.strip().lower()
-
-#     player_rows_years = df[mask & df["_season_year"].notna()].copy()
-#     if not player_rows_years.empty:
-#         latest = int(player_rows_years["_season_year"].max())
-#         requested_years = [latest - i for i in range(seasons_back)][::-1]
-#         if stat not in player_rows_years.columns:
-#             per_season = [{"season_year": y, "value": None} for y in requested_years]
-#             return {
-#                 "found": True,
-#                 "player": player_rows_years[player_col].iloc[0],
-#                 "latest_season": latest,
-#                 "requested_seasons": requested_years,
-#                 "per_season": per_season,
-#                 "total": None,
-#                 "has_consecutive_n": False,
-#                 "note": f"stat '{stat}' not found",
-#             }
-#         agg = player_rows_years.groupby("_season_year")[stat].sum(min_count=1).to_dict()
-#         per_season = []
-#         total = 0.0
-#         has_all = True
-#         for y in requested_years:
-#             v = agg.get(y)
-#             if v is None or (isinstance(v, float) and math.isnan(v)):
-#                 per_season.append({"season_year": int(y), "value": None})
-#                 has_all = False
-#             else:
-#                 per_season.append({"season_year": int(y), "value": float(v)})
-#                 total += float(v)
-#         return {
-#             "found": True,
-#             "player": player_rows_years[player_col].iloc[0],
-#             "latest_season": latest,
-#             "requested_seasons": requested_years,
-#             "per_season": per_season,
-#             "total": total if has_all else None,
-#             "has_consecutive_n": has_all,
-#         }
-
-#     # FALLBACK: no parseable numeric years -> use labels by dataset order (preserve order)
-#     player_rows = df[mask].copy()
-#     if player_rows.empty:
-#         return {"found": False, "message": "player not found or no season data"}
-
-#     labels = list(pd.Series(player_rows[season_col].astype(str)).dropna().unique())
-#     if not labels:
-#         return {
-#             "found": True,
-#             "player": player_rows[player_col].iloc[0],
-#             "requested_seasons": [],
-#             "per_season": [],
-#             "total": None,
-#             "has_consecutive_n": False,
-#             "note": "no season labels available",
-#         }
-#     chosen = labels[-seasons_back:]
-#     if stat not in player_rows.columns:
-#         per_season = [{"season_label": s, "value": None} for s in chosen]
-#         return {
-#             "found": True,
-#             "player": player_rows[player_col].iloc[0],
-#             "requested_seasons": chosen,
-#             "per_season": per_season,
-#             "total": None,
-#             "has_consecutive_n": False,
-#             "note": f"stat '{stat}' not found (fallback to labels)",
-#         }
-#     agg_label = player_rows.groupby(season_col)[stat].sum(min_count=1).to_dict()
-#     per_season = []
-#     total = 0.0
-#     has_all = True
-#     for s in chosen:
-#         v = agg_label.get(s)
-#         if v is None or (isinstance(v, float) and math.isnan(v)):
-#             per_season.append({"season_label": s, "value": None})
-#             has_all = False
-#         else:
-#             per_season.append({"season_label": s, "value": float(v)})
-#             total += float(v)
-#     return {
-#         "found": True,
-#         "player": player_rows[player_col].iloc[0],
-#         "requested_seasons": chosen,
-#         "per_season": per_season,
-#         "total": total if has_all else None,
-#         "has_consecutive_n": has_all,
-#     }
-
-# # ------- plot_player (robust, returns safe dates and image) -------
-# def plot_player(
-#     player_name: str, metrics: List[str] = None, player_col: str = "player", season_col: str = "season"
-# ) -> Dict[str, Any]:
-#     if metrics is None:
-#         metrics = ["playing_time_starts"]
-#     df = _load_meta_df().copy()
-
-#     if season_col not in df.columns:
-#         df["_season_year"] = None
-#     else:
-#         df["_season_year"] = df[season_col].apply(season_to_year)
-
-#     sel = df[df[player_col].astype(str).str.lower() == player_name.strip().lower()].copy()
-#     if sel.empty:
-#         candidates = df[df[player_col].astype(str).str.contains(player_name, case=False, na=False)][player_col].unique().tolist()[:8]
-#         return {"found": False, "message": "player not found", "player": player_name, "candidates": candidates}
-
-#     use_years = sel["_season_year"].notna().any()
-#     if use_years:
-#         sel = sel.sort_values("_season_year")
-#         dates = [int(x) if x is not None and not (isinstance(x, float) and math.isnan(x)) else None for x in sel["_season_year"].tolist()]
-#         labels = sel[season_col].astype(str).fillna("").tolist() if season_col in sel.columns else [str(d) for d in dates]
-#     else:
-#         sel = sel.sort_index()
-#         labels = sel[season_col].astype(str).fillna("").tolist() if season_col in sel.columns else [str(i) for i in range(len(sel))]
-#         dates = labels
-
-#     series = {}
-#     for m in metrics:
-#         if m not in sel.columns:
-#             series[m] = [None for _ in dates]
-#         else:
-#             vals = pd.to_numeric(sel[m], errors="coerce").tolist()
-#             series[m] = [None if (isinstance(v, float) and math.isnan(v)) else float(v) for v in vals]
-
-#     n_rows = len(dates)
-#     keep_mask = []
-#     for i in range(n_rows):
-#         row_has_value = any((series[m][i] is not None) for m in metrics)
-#         keep_mask.append(row_has_value)
-
-#     if not any(keep_mask):
-#         return {"found": True, "player": player_name, "points": {"dates": dates, "series": series}, "image_b64": None, "error": "no_numeric_points_for_metrics"}
-
-#     filtered_dates = [d for d, k in zip(dates, keep_mask) if k]
-#     filtered_series = {m: [v for v, k in zip(series[m], keep_mask) if k] for m in metrics}
-
-#     try:
-#         import matplotlib
-#         matplotlib.use("Agg")
-#         import matplotlib.pyplot as plt
-
-#         fig, ax = plt.subplots(figsize=(9, 4))
-#         if use_years and any((isinstance(d, int) or (isinstance(d, float) and not math.isnan(d)) for d in filtered_dates)):
-#             x = [int(d) if (d is not None) else None for d in filtered_dates]
-#             if any(v is None for v in x):
-#                 x = list(range(len(filtered_dates)))
-#                 for m in metrics:
-#                     ax.plot(x, filtered_series.get(m, []), marker="o", label=str(m))
-#                 ax.set_xticks(x)
-#                 ax.set_xticklabels([str(d) for d in filtered_dates], rotation=30)
-#             else:
-#                 for m in metrics:
-#                     ax.plot(x, filtered_series.get(m, []), marker="o", label=str(m))
-#                 ax.set_xticks(x)
-#         else:
-#             x = list(range(len(filtered_dates)))
-#             for m in metrics:
-#                 ax.plot(x, filtered_series.get(m, []), marker="o", label=str(m))
-#             ax.set_xticks(x)
-#             ax.set_xticklabels([str(d) for d in filtered_dates], rotation=30)
-
-#         ax.set_title(f"{player_name} - {' & '.join(metrics)}")
-#         ax.set_xlabel("Season")
-#         ax.set_ylabel("Value")
-#         ax.grid(True)
-#         if any(len(filtered_series.get(m, [])) > 0 for m in metrics):
-#             ax.legend()
-#         fig.tight_layout()
-#         buf = io.BytesIO()
-#         fig.savefig(buf, format="png", dpi=150)
-#         buf.seek(0)
-#         img_b64 = base64.b64encode(buf.read()).decode("ascii")
-#         plt.close(fig)
-#     except Exception as e:
-#         return {"found": True, "player": player_name, "points": {"dates": filtered_dates, "series": filtered_series}, "image_b64": None, "error": str(e)}
-
-#     return {"found": True, "player": player_name, "image_b64": img_b64, "points": {"dates": filtered_dates, "series": filtered_series}}
-
-# # ---------------- NEW group helpers ----------------
-
-# def candidate_metrics_from_df(df: pd.DataFrame) -> List[str]:
-#     prefer = [
-#         "goals_per_90", "xg_per_90", "npxg_per_90", "assists_per_90", "shots_per_90",
-#         "xg", "npxg", "goals", "assists", "minutes"
-#     ]
-#     available = [c for c in prefer if c in df.columns]
-#     if not available:
-#         nums = df.select_dtypes(include=["number"]).columns.tolist()
-#         available = nums[:5]
-#     return available
-
-# def filter_players(team: Optional[str] = None, position: Optional[str] = None,
-#                    seasons_back: int = DEFAULT_SEASONS_BACK, player_col: str = "player",
-#                    team_cols_candidates: List[str] = None, pos_col_candidates: List[str] = None) -> Dict[str, Any]:
-#     df = _load_meta_df().copy()
-#     if team_cols_candidates is None:
-#         team_cols_candidates = [c for c in df.columns if "team" in c.lower() or "club" in c.lower()]
-#     if pos_col_candidates is None:
-#         pos_col_candidates = [c for c in df.columns if "pos" in c.lower() or "position" in c.lower()]
-
-#     mask = pd.Series(True, index=df.index)
-#     if team:
-#         found_team_col = False
-#         for tc in team_cols_candidates:
-#             if tc in df.columns:
-#                 found_team_col = True
-#                 mask = mask & df[tc].astype(str).str.contains(team, case=False, na=False)
-#         if not found_team_col:
-#             mask = mask & (df["rag_summary"].astype(str).str.contains(team, case=False, na=False) | df[player_col].astype(str).str.contains(team, case=False, na=False))
-
-#     if position:
-#         pos_mask = pd.Series(False, index=df.index)
-#         for pc in pos_col_candidates:
-#             if pc in df.columns:
-#                 pos_mask = pos_mask | df[pc].astype(str).str.contains(position, case=False, na=False)
-#         if not pos_mask.any() and "rag_summary" in df.columns:
-#             pos_mask = df["rag_summary"].astype(str).str.contains(position, case=False, na=False)
-#         mask = mask & pos_mask
-
-#     if "season" in df.columns:
-#         df["_season_year"] = df["season"].apply(season_to_year)
-#         if df["_season_year"].notna().any():
-#             latest = int(df["_season_year"].max())
-#             valid_years = [latest - i for i in range(seasons_back)]
-#             mask = mask & df["_season_year"].isin(valid_years)
-
-#     candidates = df[mask][player_col].dropna().astype(str).unique().tolist()
-#     return {"ok": True, "players": candidates[:500], "count": len(candidates)}
-
-# def aggregate_group_stats(players: List[str], stat: str = "goals", seasons_back: int = DEFAULT_SEASONS_BACK,
-#                           player_col: str = "player", season_col: str = "season") -> Dict[str, Any]:
-#     df = _load_meta_df().copy()
-#     if season_col in df.columns:
-#         df["_season_year"] = df[season_col].apply(season_to_year)
-#         latest_years = sorted(df["_season_year"].dropna().unique())[::-1]
-#     else:
-#         df["_season_year"] = None
-#         latest_years = []
-
-#     if latest_years:
-#         years = [latest_years[0] - i for i in range(seasons_back)][::-1]
-#     else:
-#         labels = list(pd.Series(df[season_col].astype(str)).dropna().unique()) if season_col in df.columns else []
-#         years = labels[-seasons_back:] if labels else []
-
-#     totals = {y: 0.0 for y in years}
-#     per_player = {}
-#     for p in players:
-#         sel = df[df[player_col].astype(str).str.strip().str.lower() == p.strip().lower()].copy()
-#         if sel.empty:
-#             per_player[p] = {"found": False}
-#             continue
-#         if season_col in sel.columns:
-#             sel["_season_year"] = sel[season_col].apply(season_to_year)
-#         by_year = {}
-#         for y in years:
-#             if stat not in sel.columns:
-#                 v = None
-#             else:
-#                 if isinstance(y, int):
-#                     v = pd.to_numeric(sel.loc[sel["_season_year"] == y, stat], errors="coerce").sum(min_count=1)
-#                 else:
-#                     v = pd.to_numeric(sel.loc[sel[season_col] == y, stat], errors="coerce").sum(min_count=1)
-#                 v = None if pd.isna(v) else float(v)
-#             by_year[y] = v
-#             if v is not None:
-#                 totals[y] += float(v)
-#         per_player[p] = {"found": True, "per_season": by_year}
-#     return {"ok": True, "players": players, "requested_seasons": years, "per_player": per_player, "totals": totals}
-
-# def plot_group(players: List[str], metrics: List[str] = None, seasons_back: int = DEFAULT_SEASONS_BACK,
-#                player_col: str = "player", season_col: str = "season") -> Dict[str, Any]:
-#     df = _load_meta_df().copy()
-#     if season_col in df.columns:
-#         df["_season_year"] = df[season_col].apply(season_to_year)
-#     else:
-#         df["_season_year"] = None
-
-#     if metrics is None or not metrics:
-#         metrics = candidate_metrics_from_df(df)[:3] or ["goals_per_90", "xg_per_90"]
-
-#     if df["_season_year"].notna().any():
-#         all_years = sorted(df["_season_year"].dropna().unique())[::-1]
-#         chosen_years = all_years[:seasons_back][::-1] if all_years else []
-#     else:
-#         labels = list(pd.Series(df[season_col].astype(str)).dropna().unique()) if season_col in df.columns else []
-#         chosen_years = labels[-seasons_back:] if labels else []
-
-#     series_table = {}
-#     for p in players:
-#         sel = df[df[player_col].astype(str).str.strip().str.lower() == p.strip().lower()].copy()
-#         if sel.empty:
-#             series_table[p] = {"found": False}
-#             continue
-#         if season_col in sel.columns:
-#             sel["_season_year"] = sel[season_col].apply(season_to_year)
-#         sel = sel.sort_values("_season_year") if "_season_year" in sel.columns else sel.sort_index()
-#         primary = metrics[0]
-#         series_vals = []
-#         for y in chosen_years:
-#             if primary in sel.columns:
-#                 if isinstance(y, int):
-#                     v = pd.to_numeric(sel.loc[sel["_season_year"] == y, primary], errors="coerce").sum(min_count=1)
-#                 else:
-#                     v = pd.to_numeric(sel.loc[sel[season_col] == y, primary], errors="coerce").sum(min_count=1)
-#                 v = None if pd.isna(v) else float(v)
-#             else:
-#                 v = None
-#             series_vals.append(v)
-#         series_table[p] = {"found": True, "series": series_vals}
-
-#     latest = chosen_years[-1] if chosen_years else None
-#     percentiles = {}
-#     import numpy as np
-#     for m in metrics:
-#         if m in df.columns:
-#             col_vals = pd.to_numeric(df[m], errors="coerce").dropna().values
-#         else:
-#             col_vals = np.array([])
-#         for p in players:
-#             if not series_table.get(p, {}).get("found"):
-#                 percentiles.setdefault(p, {})[m] = None
-#                 continue
-#             sel = df[df[player_col].astype(str).str.strip().str.lower() == p.strip().lower()].copy()
-#             if latest is not None and "_season_year" in sel.columns and isinstance(latest, int):
-#                 if m in sel.columns:
-#                     row_val = pd.to_numeric(sel.loc[sel["_season_year"] == latest, m], errors="coerce").sum(min_count=1)
-#                 else:
-#                     row_val = None
-#             else:
-#                 if m in sel.columns and not sel[m].dropna().empty:
-#                     row_val = pd.to_numeric(sel[m].dropna().iloc[-1], errors="coerce")
-#                 else:
-#                     row_val = None
-#             if row_val is None or (isinstance(row_val, float) and np.isnan(row_val)) or len(col_vals) == 0:
-#                 percentiles.setdefault(p, {})[m] = None
-#             else:
-#                 percentiles.setdefault(p, {})[m] = float((col_vals <= float(row_val)).sum()) / float(len(col_vals)) * 100.0
-
-#     try:
-#         import matplotlib
-#         matplotlib.use("Agg")
-#         import matplotlib.pyplot as plt
-
-#         fig = plt.figure(figsize=(12, 6))
-#         ax1 = fig.add_subplot(1, 2, 1)
-#         if chosen_years:
-#             x = list(range(len(chosen_years)))
-#             for p in players:
-#                 if not series_table.get(p, {}).get("found"):
-#                     continue
-#                 ax1.plot(x, series_table[p]["series"], marker="o", label=p)
-#             ax1.set_xticks(x)
-#             ax1.set_xticklabels([str(y) for y in chosen_years], rotation=30)
-#         else:
-#             for p in players:
-#                 if not series_table.get(p, {}).get("found"):
-#                     continue
-#                 vals = series_table[p]["series"]
-#                 ax1.plot(list(range(len(vals))), vals, marker="o", label=p)
-#         ax1.set_title(f"Group time-series ({metrics[0]})")
-#         ax1.grid(True)
-#         ax1.legend(fontsize="small")
-
-#         ax2 = fig.add_subplot(1, 2, 2, polar=True)
-#         theta = np.linspace(0, 2 * np.pi, len(metrics), endpoint=False)
-#         for p in players:
-#             if not percentiles.get(p):
-#                 continue
-#             vals = [percentiles[p].get(m, 0.0) or 0.0 for m in metrics]
-#             vals_closed = vals + [vals[0]]
-#             theta_closed = np.concatenate((theta, [theta[0]]))
-#             ax2.plot(theta_closed, vals_closed, marker="o", label=p)
-#             ax2.fill(theta_closed, vals_closed, alpha=0.12)
-#         ax2.set_xticks(theta)
-#         ax2.set_xticklabels(metrics, fontsize=9)
-#         ax2.set_yticks([20, 40, 60, 80, 100])
-#         ax2.set_ylim(0, 100)
-#         ax2.set_title("Latest-season percentiles (0-100)")
-#         ax2.legend(loc="upper right", bbox_to_anchor=(1.4, 1.05), fontsize="small")
-
-#         fig.tight_layout()
-#         buf = io.BytesIO()
-#         fig.savefig(buf, format="png", dpi=150)
-#         buf.seek(0)
-#         img_b64 = base64.b64encode(buf.read()).decode("ascii")
-#         plt.close(fig)
-#     except Exception as e:
-#         return {"ok": False, "error": "plot_error", "detail": str(e), "players": players, "chosen_seasons": chosen_years, "series_table": series_table, "percentiles": percentiles}
-
-#     return {"ok": True, "players": players, "chosen_seasons": chosen_years, "image_b64": img_b64, "series_table": series_table, "percentiles": percentiles}
-
-# mcp/tools.py - COMPLETE VERSION WITH FLEXIBLE MATCHING
+# mcp/tools.py - Complete rewrite addressing all 40+ issues
 import os
 import pickle
-import math
 import re
 import base64
 import io
-from dotenv import load_dotenv
+import logging
+import threading
+from typing import List, Dict, Any, Optional, Tuple, Union
+from dataclasses import dataclass
+from functools import lru_cache
 import pandas as pd
 import numpy as np
-from typing import List, Dict, Any, Optional, Tuple
+from sklearn.preprocessing import StandardScaler
 
-load_dotenv()
+from mcp.config import (
+    get_openai_api_key, get_data_csv_path, get_vector_dir, 
+    get_embedding_model, get_k_default, get_default_seasons_back
+)
 
-# Configuration
-DATA_CSV = os.getenv("DATA_PATH", "./data/FINAL_with_rag.csv")
-VECTOR_DIR = os.getenv("VECTORSTORE_DIR", "./data/vectorstore")
-EMB_MODEL = os.getenv("OPENAI_EMBED_MODEL", "text-embedding-3-small")
-OPENAI_KEY = os.getenv("OPENAI_API_KEY")
-K_DEFAULT = int(os.getenv("K_DEFAULT", "5"))
-DEFAULT_SEASONS_BACK = int(os.getenv("DEFAULT_SEASONS_BACK", "5"))
+# Configure logging
+logger = logging.getLogger(__name__)
 
-# ============================================================================
-# HELPER FUNCTIONS
-# ============================================================================
+# Thread-safe singleton OpenAI client
+_openai_client = None
+_client_lock = threading.Lock()
 
-def _ensure_openai():
-    """Lazy load OpenAI client."""
-    try:
-        from openai import OpenAI
-        return OpenAI(api_key=OPENAI_KEY)
-    except Exception as e:
-        raise ImportError("Install openai>=1.0.0 and set OPENAI_API_KEY in .env. Err: " + str(e))
+def _get_openai_client():
+    """Thread-safe singleton OpenAI client with proper error handling."""
+    global _openai_client
+    
+    with _client_lock:
+        if _openai_client is None:
+            try:
+                from openai import OpenAI
+                api_key = get_openai_api_key()  # Dynamic key retrieval
+                _openai_client = OpenAI(api_key=api_key)
+                logger.info("OpenAI client initialized successfully")
+            except ImportError as e:
+                raise ImportError("Install openai>=1.0.0: pip install openai") from e
+            except Exception as e:
+                logger.error(f"Failed to initialize OpenAI client: {e}")
+                raise
+    
+    return _openai_client
 
-def _ensure_faiss():
-    """Lazy load FAISS library."""
-    try:
-        import faiss
-        return faiss
-    except Exception as e:
-        raise ImportError("Install faiss-cpu (pip install faiss-cpu). Err: " + str(e))
+# Cached data loading with proper cache invalidation
+_cached_df = None
+_df_cache_time = None
+_cache_lock = threading.Lock()
 
-def _load_meta_df():
-    """Load the main CSV data file."""
-    if not os.path.exists(DATA_CSV):
-        raise RuntimeError(f"CSV not found at {DATA_CSV}")
-    df = pd.read_csv(DATA_CSV)
+@lru_cache(maxsize=1)
+def _get_dataframe_cached(file_path: str, mtime: float) -> pd.DataFrame:
+    """LRU cached dataframe loading."""
+    logger.info(f"Loading CSV: {file_path}")
+    df = pd.read_csv(file_path)
+    
+    # Normalize columns consistently
     if "rag_summary" in df.columns:
         df["rag_summary"] = df["rag_summary"].astype(str).fillna("")
+    
     return df
 
-def _load_index_and_meta():
-    """Load FAISS index and metadata for semantic search."""
-    faiss = _ensure_faiss()
-    idx_path = os.path.join(VECTOR_DIR, "index.faiss")
-    meta_path = os.path.join(VECTOR_DIR, "metadata.pkl")
-    if not os.path.exists(idx_path) or not os.path.exists(meta_path):
-        raise RuntimeError("FAISS index or metadata not found. Run scripts/batch_embed.py first.")
-    index = faiss.read_index(idx_path)
-    with open(meta_path, "rb") as f:
-        df = pickle.load(f)
-    return faiss, index, df
-
-def season_to_year(s):
-    """
-    Convert season string to year integer.
-    Examples: "2021/22" -> 2022, "2021-22" -> 2022, "22/23" -> 2023, "2022" -> 2022
-    Returns the LATER year from ranges (for matching "2022" to "2021-22" season).
-    """
+def _load_dataframe(force_reload: bool = False) -> pd.DataFrame:
+    """Load CSV with thread-safe caching and proper error handling."""
+    file_path = get_data_csv_path()
+    
+    if not os.path.exists(file_path):
+        raise FileNotFoundError(f"CSV not found: {file_path}")
+    
+    current_mtime = os.path.getmtime(file_path)
+    
+    if force_reload:
+        _get_dataframe_cached.cache_clear()
+    
     try:
-        if s is None:
-            return None
-        s = str(s)
-        parts = re.findall(r"\d{2,4}", s)
-        if not parts:
-            try:
-                v = int(float(s))
-                return v
-            except Exception:
-                return None
-        # Take the last number found (the ending year)
-        y = parts[-1]
-        if len(y) == 2:
-            return 2000 + int(y)
-        return int(y)
-    except Exception:
+        df = _get_dataframe_cached(file_path, current_mtime)
+        return df.copy()  # Always return copy to prevent mutations
+    except Exception as e:
+        logger.error(f"Failed to load dataframe: {e}")
+        raise
+
+def _get_faiss_components():
+    """Load FAISS index and metadata with proper error handling."""
+    try:
+        import faiss
+    except ImportError as e:
+        raise ImportError("Install faiss-cpu: pip install faiss-cpu") from e
+    
+    vector_dir = get_vector_dir()
+    idx_path = os.path.join(vector_dir, "index.faiss")
+    meta_path = os.path.join(vector_dir, "metadata.pkl")
+    
+    if not os.path.exists(idx_path):
+        raise FileNotFoundError(f"FAISS index not found: {idx_path}")
+    if not os.path.exists(meta_path):
+        raise FileNotFoundError(f"FAISS metadata not found: {meta_path}")
+    
+    try:
+        index = faiss.read_index(idx_path)
+        with open(meta_path, "rb") as f:
+            metadata_df = pickle.load(f)
+        
+        logger.info(f"Loaded FAISS index with {index.ntotal} vectors")
+        return faiss, index, metadata_df
+    except Exception as e:
+        logger.error(f"Failed to load FAISS components: {e}")
+        raise
+
+def season_to_year(season_str) -> Optional[int]:
+    """Convert season string to ending year with robust parsing."""
+    if pd.isna(season_str) or season_str is None:
         return None
+    
+    try:
+        s = str(season_str).strip()
+        if not s:
+            return None
+            
+        # Find all 2-4 digit numbers
+        numbers = re.findall(r'\b\d{2,4}\b', s)
+        if not numbers:
+            # Try direct conversion for simple numeric strings
+            return int(float(s))
+        
+        # Take the last (ending) year
+        year_str = numbers[-1]
+        year = int(year_str)
+        
+        # Handle 2-digit years (assume 20xx for years 00-99)
+        if year < 100:
+            if year <= 50:  # 00-50 -> 2000-2050
+                year += 2000
+            else:  # 51-99 -> 1951-1999 (historical data)
+                year += 1900
+        
+        # Sanity check for reasonable football seasons
+        if 1900 <= year <= 2100:
+            return year
+        
+        return None
+    except (ValueError, TypeError, OverflowError):
+        return None
+
+# Comprehensive position mapping with synonyms
+POSITION_MAPPING = {
+    # Forwards/Strikers
+    'striker': ['FW', 'ST', 'CF', 'F'],
+    'forward': ['FW', 'ST', 'CF', 'F'],
+    'center-forward': ['CF', 'ST', 'FW'],
+    'centre-forward': ['CF', 'ST', 'FW'],
+    'cf': ['CF', 'ST', 'FW'],
+    'st': ['ST', 'CF', 'FW'],
+    'fw': ['FW', 'ST', 'CF'],
+    
+    # Midfielders
+    'midfielder': ['MF', 'CM', 'DM', 'AM', 'CAM', 'CDM', 'M'],
+    'midfield': ['MF', 'CM', 'DM', 'AM', 'CAM', 'CDM', 'M'],
+    'central-midfielder': ['CM', 'MF'],
+    'attacking-midfielder': ['AM', 'CAM', 'MF'],
+    'defensive-midfielder': ['DM', 'CDM', 'MF'],
+    'cm': ['CM', 'MF'],
+    'am': ['AM', 'CAM', 'MF'],
+    'dm': ['DM', 'CDM', 'MF'],
+    'cam': ['CAM', 'AM', 'MF'],
+    'cdm': ['CDM', 'DM', 'MF'],
+    'mf': ['MF', 'CM', 'AM', 'DM'],
+    
+    # Defenders
+    'defender': ['DF', 'CB', 'LB', 'RB', 'LWB', 'RWB', 'D'],
+    'defence': ['DF', 'CB', 'LB', 'RB', 'LWB', 'RWB', 'D'],
+    'defense': ['DF', 'CB', 'LB', 'RB', 'LWB', 'RWB', 'D'],
+    'center-back': ['CB', 'DF'],
+    'centre-back': ['CB', 'DF'],
+    'fullback': ['LB', 'RB', 'DF'],
+    'full-back': ['LB', 'RB', 'DF'],
+    'wingback': ['LWB', 'RWB', 'DF'],
+    'wing-back': ['LWB', 'RWB', 'DF'],
+    'cb': ['CB', 'DF'],
+    'lb': ['LB', 'DF'],
+    'rb': ['RB', 'DF'],
+    'lwb': ['LWB', 'DF'],
+    'rwb': ['RWB', 'DF'],
+    'df': ['DF', 'CB', 'LB', 'RB'],
+    
+    # Goalkeepers
+    'goalkeeper': ['GK', 'G'],
+    'keeper': ['GK', 'G'],
+    'goalie': ['GK', 'G'],
+    'gk': ['GK'],
+    
+    # Wingers (can be forwards or midfielders)
+    'winger': ['LW', 'RW', 'LM', 'RM', 'W'],
+    'wing': ['LW', 'RW', 'LM', 'RM', 'W'],
+    'left-winger': ['LW', 'LM'],
+    'right-winger': ['RW', 'RM'],
+    'lw': ['LW', 'LM'],
+    'rw': ['RW', 'RM'],
+    'lm': ['LM', 'LW'],
+    'rm': ['RM', 'RW']
+}
+
+def _normalize_position(position: str) -> List[str]:
+    """Convert position query to canonical position codes with comprehensive mapping."""
+    if not position:
+        return []
+    
+    pos_lower = position.lower().strip()
+    
+    # Direct mapping from synonyms
+    if pos_lower in POSITION_MAPPING:
+        return POSITION_MAPPING[pos_lower]
+    
+    # Check if it's already a canonical code
+    canonical_codes = set()
+    for codes in POSITION_MAPPING.values():
+        canonical_codes.update(codes)
+    
+    if position.upper() in canonical_codes:
+        return [position.upper()]
+    
+    # Partial matching for compound terms
+    matches = []
+    for synonym, codes in POSITION_MAPPING.items():
+        if synonym in pos_lower or pos_lower in synonym:
+            matches.extend(codes)
+    
+    if matches:
+        return list(set(matches))  # Remove duplicates
+    
+    # Return original if no mapping found
+    return [position]
 
 def _flexible_player_match(df: pd.DataFrame, player_name: str, player_col: str = "player") -> pd.Series:
-    """
-    CRITICAL FIX: Flexible player name matching.
+    """Robust player name matching with multiple strategies and proper error handling."""
+    if not player_name or pd.isna(player_name):
+        return pd.Series([False] * len(df), index=df.index, dtype=bool)
     
-    Tries in order:
-    1. Exact match (case-insensitive): "lionel messi" == "lionel messi"
-    2. Partial match (contains): "lionel messi" contains "messi"
-    3. Token match: all tokens in query present in player name
-    
-    Returns: Boolean Series (mask)
-    """
-    if "_player_lc" not in df.columns:
-        df["_player_lc"] = df[player_col].astype(str).str.strip().str.lower()
-    
-    player_name_lc = player_name.strip().lower()
-    
-    # 1. Exact match
-    mask = df["_player_lc"] == player_name_lc
-    
-    # 2. Partial match (contains)
-    if not mask.any():
-        mask = df["_player_lc"].str.contains(player_name_lc, na=False, regex=False)
-    
-    # 3. Token match (all query tokens present in name)
-    if not mask.any():
-        tokens = player_name_lc.split()
-        if tokens:
-            mask = df["_player_lc"].apply(
-                lambda x: all(token in str(x) for token in tokens)
+    try:
+        player_lower = str(player_name).strip().lower()
+        if not player_lower:
+            return pd.Series([False] * len(df), index=df.index, dtype=bool)
+        
+        df_players = df[player_col].astype(str).str.strip().str.lower()
+        
+        # Strategy 1: Exact match
+        mask = df_players == player_lower
+        if mask.any():
+            return mask
+        
+        # Strategy 2: Contains match (player name contains query)
+        mask = df_players.str.contains(player_lower, na=False, regex=False)
+        if mask.any():
+            return mask
+        
+        # Strategy 3: Token-based match (all query tokens in player name)
+        query_tokens = player_lower.split()
+        if len(query_tokens) > 1:
+            mask = df_players.apply(
+                lambda x: all(token in str(x) for token in query_tokens) if pd.notna(x) else False
             )
-    
-    return mask
+            if mask.any():
+                return mask
+        
+        # Strategy 4: Reverse contains (query contains player name - for nicknames)
+        mask = pd.Series([False] * len(df), index=df.index, dtype=bool)
+        for idx, player in df_players.items():
+            if pd.notna(player) and player and player in player_lower:
+                mask.iloc[idx] = True
+        
+        return mask
+        
+    except Exception as e:
+        logger.error(f"Error in player matching for '{player_name}': {e}")
+        return pd.Series([False] * len(df), index=df.index, dtype=bool)
 
-def _get_canonical_player_name(df: pd.DataFrame, player_name: str, player_col: str = "player") -> Optional[str]:
-    """Get the canonical (full) player name from the dataset."""
-    mask = _flexible_player_match(df, player_name, player_col)
-    matches = df[mask]
-    if matches.empty:
-        return None
-    return matches[player_col].iloc[0]
-
-def candidate_metrics_from_df(df: pd.DataFrame) -> List[str]:
-    """Get sensible default metrics from the dataframe."""
-    prefer = [
-        "goals_per_90", "xg_per_90", "npxg_per_90", "assists_per_90", "shots_per_90",
-        "xg", "npxg", "goals", "assists", "minutes", "playing_time_starts"
-    ]
-    available = [c for c in prefer if c in df.columns]
-    if not available:
-        nums = df.select_dtypes(include=["number"]).columns.tolist()
-        available = nums[:5]
-    return available
-
-# ============================================================================
-# CORE TOOLS
-# ============================================================================
+@dataclass
+class SearchResult:
+    """Structured search result with proper typing."""
+    score: float
+    idx: int
+    player: str
+    season: Optional[str]
+    rag_summary: str
 
 def get_schema() -> List[str]:
-    """
-    Get the available columns in the dataset.
-    Used by agents to understand what metrics are available.
-    """
-    if not os.path.exists(DATA_CSV):
-        return []
+    """Get available dataset columns with error handling."""
     try:
-        df = pd.read_csv(DATA_CSV, nrows=1)
+        df = _load_dataframe()
         return list(df.columns)
-    except Exception:
+    except Exception as e:
+        logger.error(f"Failed to get schema: {e}")
         return []
 
-def search_player(query: str, k: int = K_DEFAULT) -> List[Dict[str, Any]]:
-    """
-    Semantic search for players using FAISS embeddings.
-    Falls back to simple text search if embeddings unavailable.
-    
-    Returns: List of dicts with keys: score, idx, player, season, rag_summary
-    """
-    if not query:
+def search_player(query: str, k: int = None) -> List[Dict[str, Any]]:
+    """Semantic player search with robust fallback and proper error handling."""
+    if not query or not query.strip():
         return []
     
+    if k is None:
+        k = get_k_default()
+    
+    query = query.strip()
+    
     try:
-        client = _ensure_openai()
-        faiss = _ensure_faiss()
-        _, index, df = _load_index_and_meta()
+        # Try FAISS search first
+        client = _get_openai_client()
+        faiss_lib, index, metadata_df = _get_faiss_components()
         
-        # Generate embedding for query
-        resp = client.embeddings.create(model=EMB_MODEL, input=[query])
-        emb = resp.data[0]["embedding"] if isinstance(resp.data[0], dict) else getattr(resp.data[0], "embedding")
+        # Generate embedding with proper error handling
+        try:
+            response = client.embeddings.create(
+                model=get_embedding_model(), 
+                input=[query]
+            )
+            embedding = response.data[0].embedding
+        except Exception as e:
+            logger.warning(f"Embedding generation failed: {e}")
+            raise  # Re-raise to trigger fallback
         
-        # Search FAISS index
-        vec = np.array(emb, dtype="float32").reshape(1, -1)
-        faiss.normalize_L2(vec)
-        D, I = index.search(vec, k)
+        # Search index with validation
+        vec = np.array(embedding, dtype=np.float32).reshape(1, -1)
+        
+        if vec.shape[1] != index.d:
+            raise ValueError(f"Embedding dimension mismatch: {vec.shape[1]} != {index.d}")
+        
+        faiss_lib.normalize_L2(vec)
+        distances, indices = index.search(vec, k)
         
         results = []
-        query_lower = query.strip().lower()
-
-        for score, idx in zip(D[0].tolist(), I[0].tolist()):
-            if idx < 0:
-                continue
-            row = df.iloc[idx]
-            player_name = str(row.get("player") or "")
-            player_name_lower = player_name.strip().lower()
-
-            # CRITICAL FIX: Boost score for exact/partial player name matches
-            # FAISS returns cosine similarity (0-1 range, higher is better)
-            boosted_score = float(score)
-
-            # Exact match: set to maximum score
-            if player_name_lower == query_lower:
-                boosted_score = 1.0
-            # Contains match: boost significantly
-            elif query_lower in player_name_lower:
-                boosted_score = max(boosted_score, 0.9)
-            # Token match: all query tokens in player name
-            elif all(token in player_name_lower for token in query_lower.split()):
-                boosted_score = max(boosted_score, 0.85)
-            # Partial token overlap
-            else:
-                query_tokens = set(query_lower.split())
-                player_tokens = set(player_name_lower.split())
-                overlap = len(query_tokens & player_tokens)
-                if overlap > 0:
-                    # Boost based on token overlap ratio
-                    overlap_ratio = overlap / len(query_tokens)
-                    if overlap_ratio > 0.5:  # More than half tokens match
-                        boosted_score = max(boosted_score, 0.7 + (overlap_ratio * 0.2))
-
-            results.append({
-                "score": boosted_score,
-                "idx": int(idx),
-                "player": player_name,
-                "season": row.get("season"),
-                "rag_summary": str(row.get("rag_summary"))[:1000],
-            })
-
-        # Re-sort by boosted scores
-        results.sort(key=lambda x: -x["score"])
-        return results
+        query_lower = query.lower()
         
-    except Exception as e:
-        # Fallback: simple text search with smart scoring
-        try:
-            df = _load_meta_df()
-            matches = []
-            query_lower = str(query).strip().lower()
-            query_tokens = set(query_lower.split())
-
-            for i, row in df.iterrows():
+        for score, idx in zip(distances[0], indices[0]):
+            if idx < 0 or idx >= len(metadata_df):
+                continue
+                
+            try:
+                row = metadata_df.iloc[idx]
                 player_name = str(row.get("player", ""))
-                player_name_lower = player_name.strip().lower()
-                rag_summary = str(row.get("rag_summary", ""))
-
-                # Smart scoring - same logic as FAISS
-                score = 0.0
-
-                # Exact player name match
-                if player_name_lower == query_lower:
-                    score = 1.0
-                # Contains match in player name
-                elif query_lower in player_name_lower:
-                    score = 0.9
-                # All query tokens in player name
-                elif all(token in player_name_lower for token in query_lower.split()):
-                    score = 0.85
-                # Partial token overlap in player name
-                else:
-                    player_tokens = set(player_name_lower.split())
-                    overlap = len(query_tokens & player_tokens)
-                    if overlap > 0:
-                        overlap_ratio = overlap / len(query_tokens)
-                        if overlap_ratio > 0.5:
-                            score = 0.7 + (overlap_ratio * 0.2)
-
-                # If not found in player name, check rag_summary (lower priority)
-                if score == 0.0 and query_lower in rag_summary.lower():
-                    score = 0.3
-
-                if score > 0:
-                    matches.append({
-                        "score": float(score),
-                        "idx": int(i),
-                        "player": player_name,
-                        "season": row.get("season"),
-                        "rag_summary": rag_summary[:1000]
-                    })
-
-            return sorted(matches, key=lambda r: r["score"], reverse=True)[:k]
+                
+                # Boost scores for name matches (FAISS returns cosine similarity)
+                boosted_score = float(score)
+                
+                # Exact name match
+                if query_lower == player_name.lower():
+                    boosted_score = 1.0
+                # Contains match
+                elif query_lower in player_name.lower():
+                    boosted_score = max(boosted_score, 0.95)
+                # Token overlap
+                elif any(token in player_name.lower() for token in query_lower.split()):
+                    boosted_score = max(boosted_score, 0.85)
+                
+                results.append({
+                    "score": boosted_score,
+                    "idx": int(idx),
+                    "player": player_name,
+                    "season": row.get("season"),
+                    "rag_summary": str(row.get("rag_summary", ""))[:1000]
+                })
+            except Exception as e:
+                logger.warning(f"Error processing search result {idx}: {e}")
+                continue
+        
+        return sorted(results, key=lambda x: -x["score"])
+        
+    except Exception as e:
+        logger.warning(f"FAISS search failed, using fallback: {e}")
+        
+        # Fallback to simple text search
+        try:
+            df = _load_dataframe()
+            results = []
+            query_lower = query.lower()
+            query_tokens = set(query_lower.split())
+            
+            for idx, row in df.iterrows():
+                try:
+                    player_name = str(row.get("player", ""))
+                    player_lower = player_name.lower()
+                    player_tokens = set(player_lower.split())
+                    
+                    score = 0.0
+                    
+                    # Exact match
+                    if query_lower == player_lower:
+                        score = 1.0
+                    # Contains match
+                    elif query_lower in player_lower:
+                        score = 0.9
+                    # All query tokens in player name
+                    elif query_tokens.issubset(player_tokens):
+                        score = 0.8
+                    # Partial token overlap
+                    else:
+                        overlap = len(query_tokens & player_tokens)
+                        if overlap > 0:
+                            overlap_ratio = overlap / len(query_tokens)
+                            if overlap_ratio >= 0.5:
+                                score = 0.5 + (overlap_ratio * 0.3)
+                    
+                    # Check rag_summary as last resort (lower priority)
+                    if score == 0.0:
+                        rag_summary = str(row.get("rag_summary", "")).lower()
+                        if query_lower in rag_summary:
+                            score = 0.2
+                    
+                    if score > 0:
+                        results.append({
+                            "score": score,
+                            "idx": int(idx),
+                            "player": player_name,
+                            "season": row.get("season"),
+                            "rag_summary": str(row.get("rag_summary", ""))[:500]
+                        })
+                except Exception as e:
+                    logger.warning(f"Error processing row {idx}: {e}")
+                    continue
+            
+            return sorted(results, key=lambda x: -x["score"])[:k]
+            
         except Exception as e2:
-            raise RuntimeError("Search unavailable: " + str(e2))
-
-def aggregate_player_stat(
-    player_name: str,
-    stat: str = "playing_time_starts",
-    seasons_back: int = DEFAULT_SEASONS_BACK,
-    player_col: str = "player",
-    season_col: str = "season",
-) -> Dict[str, Any]:
-    """
-    Aggregate a statistic for a player over multiple seasons.
-    NOW WITH FLEXIBLE NAME MATCHING!
-    
-    Returns dict with:
-    - found: bool
-    - player: canonical player name
-    - stat: the statistic name
-    - latest_season: most recent season year
-    - requested_seasons: list of years/labels
-    - per_season: list of {season_year/season_label: int, value: float}
-    - total: sum if all seasons have data
-    - has_consecutive_n: bool, whether all requested seasons have data
-    """
-    df = _load_meta_df().copy()
-    
-    if season_col not in df.columns:
-        raise RuntimeError(f"Season column '{season_col}' not found in CSV")
-
-    df["_season_year"] = df[season_col].apply(season_to_year)
-    
-    # CRITICAL FIX: Use flexible matching
-    mask = _flexible_player_match(df, player_name, player_col)
-    player_rows_years = df[mask & df["_season_year"].notna()].copy()
-    
-    if not player_rows_years.empty:
-        latest = int(player_rows_years["_season_year"].max())
-        requested_years = [latest - i for i in range(seasons_back)][::-1]
-        
-        # Get canonical player name
-        canonical_player_name = player_rows_years[player_col].iloc[0]
-        
-        if stat not in player_rows_years.columns:
-            per_season = [{"season_year": y, "value": None} for y in requested_years]
-            return {
-                "found": True,
-                "player": canonical_player_name,
-                "stat": stat,
-                "latest_season": latest,
-                "requested_seasons": requested_years,
-                "per_season": per_season,
-                "total": None,
-                "has_consecutive_n": False,
-                "note": f"stat '{stat}' not found in columns",
-            }
-        
-        # Aggregate by season year
-        agg = player_rows_years.groupby("_season_year")[stat].sum(min_count=1).to_dict()
-        per_season = []
-        total = 0.0
-        has_all = True
-        
-        for y in requested_years:
-            v = agg.get(y)
-            if v is None or (isinstance(v, float) and math.isnan(v)):
-                per_season.append({"season_year": int(y), "value": None})
-                has_all = False
-            else:
-                per_season.append({"season_year": int(y), "value": float(v)})
-                total += float(v)
-        
-        return {
-            "found": True,
-            "player": canonical_player_name,
-            "stat": stat,
-            "latest_season": latest,
-            "requested_seasons": requested_years,
-            "per_season": per_season,
-            "total": total if has_all else None,
-            "has_consecutive_n": has_all,
-        }
-
-    # FALLBACK: No parseable numeric years, use season labels
-    player_rows = df[mask].copy()
-    if player_rows.empty:
-        return {
-            "found": False,
-            "message": f"player '{player_name}' not found",
-            "query": player_name
-        }
-
-    labels = list(pd.Series(player_rows[season_col].astype(str)).dropna().unique())
-    if not labels:
-        return {
-            "found": True,
-            "player": player_rows[player_col].iloc[0],
-            "stat": stat,
-            "requested_seasons": [],
-            "per_season": [],
-            "total": None,
-            "has_consecutive_n": False,
-            "note": "no season labels available",
-        }
-    
-    canonical_player_name = player_rows[player_col].iloc[0]
-    chosen = labels[-seasons_back:]
-    
-    if stat not in player_rows.columns:
-        per_season = [{"season_label": s, "value": None} for s in chosen]
-        return {
-            "found": True,
-            "player": canonical_player_name,
-            "stat": stat,
-            "requested_seasons": chosen,
-            "per_season": per_season,
-            "total": None,
-            "has_consecutive_n": False,
-            "note": f"stat '{stat}' not found (fallback to labels)",
-        }
-    
-    agg_label = player_rows.groupby(season_col)[stat].sum(min_count=1).to_dict()
-    per_season = []
-    total = 0.0
-    has_all = True
-    
-    for s in chosen:
-        v = agg_label.get(s)
-        if v is None or (isinstance(v, float) and math.isnan(v)):
-            per_season.append({"season_label": s, "value": None})
-            has_all = False
-        else:
-            per_season.append({"season_label": s, "value": float(v)})
-            total += float(v)
-    
-    return {
-        "found": True,
-        "player": canonical_player_name,
-        "stat": stat,
-        "requested_seasons": chosen,
-        "per_season": per_season,
-        "total": total if has_all else None,
-        "has_consecutive_n": has_all,
-    }
-
-def plot_player(
-    player_name: str,
-    metrics: List[str] = None,
-    player_col: str = "player",
-    season_col: str = "season"
-) -> Dict[str, Any]:
-    """
-    Plot metrics for a player over time.
-    NOW WITH FLEXIBLE NAME MATCHING!
-    
-    Returns dict with:
-    - found: bool
-    - player: canonical name
-    - image_b64: base64 encoded PNG
-    - points: dict with dates and series data
-    """
-    if metrics is None:
-        metrics = ["playing_time_starts"]
-    
-    df = _load_meta_df().copy()
-
-    if season_col not in df.columns:
-        df["_season_year"] = None
-    else:
-        df["_season_year"] = df[season_col].apply(season_to_year)
-
-    # CRITICAL FIX: Use flexible matching
-    mask = _flexible_player_match(df, player_name, player_col)
-    sel = df[mask].copy()
-    
-    if sel.empty:
-        # Try to find similar names for suggestions
-        candidates = df[df[player_col].astype(str).str.contains(player_name, case=False, na=False)][player_col].unique().tolist()[:8]
-        return {
-            "found": False,
-            "message": "player not found",
-            "player": player_name,
-            "candidates": candidates
-        }
-
-    # Get canonical name
-    canonical_name = sel[player_col].iloc[0]
-    
-    use_years = sel["_season_year"].notna().any()
-    if use_years:
-        sel = sel.sort_values("_season_year")
-        dates = [int(x) if x is not None and not (isinstance(x, float) and math.isnan(x)) else None for x in sel["_season_year"].tolist()]
-        labels = sel[season_col].astype(str).fillna("").tolist() if season_col in sel.columns else [str(d) for d in dates]
-    else:
-        sel = sel.sort_index()
-        labels = sel[season_col].astype(str).fillna("").tolist() if season_col in sel.columns else [str(i) for i in range(len(sel))]
-        dates = labels
-
-    # Extract series data
-    series = {}
-    for m in metrics:
-        if m not in sel.columns:
-            series[m] = [None for _ in dates]
-        else:
-            vals = pd.to_numeric(sel[m], errors="coerce").tolist()
-            series[m] = [None if (isinstance(v, float) and math.isnan(v)) else float(v) for v in vals]
-
-    # Filter out rows with no data
-    n_rows = len(dates)
-    keep_mask = []
-    for i in range(n_rows):
-        row_has_value = any((series[m][i] is not None) for m in metrics)
-        keep_mask.append(row_has_value)
-
-    if not any(keep_mask):
-        return {
-            "found": True,
-            "player": canonical_name,
-            "points": {"dates": dates, "series": series},
-            "image_b64": None,
-            "error": "no_numeric_points_for_metrics"
-        }
-
-    filtered_dates = [d for d, k in zip(dates, keep_mask) if k]
-    filtered_series = {m: [v for v, k in zip(series[m], keep_mask) if k] for m in metrics}
-
-    # Create plot
-    try:
-        import matplotlib
-        matplotlib.use("Agg")
-        import matplotlib.pyplot as plt
-
-        fig, ax = plt.subplots(figsize=(9, 4))
-        
-        if use_years and any((isinstance(d, int) or (isinstance(d, float) and not math.isnan(d)) for d in filtered_dates)):
-            x = [int(d) if (d is not None) else None for d in filtered_dates]
-            if any(v is None for v in x):
-                x = list(range(len(filtered_dates)))
-                for m in metrics:
-                    ax.plot(x, filtered_series.get(m, []), marker="o", label=str(m))
-                ax.set_xticks(x)
-                ax.set_xticklabels([str(d) for d in filtered_dates], rotation=30)
-            else:
-                for m in metrics:
-                    ax.plot(x, filtered_series.get(m, []), marker="o", label=str(m))
-                ax.set_xticks(x)
-        else:
-            x = list(range(len(filtered_dates)))
-            for m in metrics:
-                ax.plot(x, filtered_series.get(m, []), marker="o", label=str(m))
-            ax.set_xticks(x)
-            ax.set_xticklabels([str(d) for d in filtered_dates], rotation=30)
-
-        ax.set_title(f"{canonical_name} - {' & '.join(metrics)}")
-        ax.set_xlabel("Season")
-        ax.set_ylabel("Value")
-        ax.grid(True)
-        
-        if any(len(filtered_series.get(m, [])) > 0 for m in metrics):
-            ax.legend()
-        
-        fig.tight_layout()
-        buf = io.BytesIO()
-        fig.savefig(buf, format="png", dpi=150)
-        buf.seek(0)
-        img_b64 = base64.b64encode(buf.read()).decode("ascii")
-        plt.close(fig)
-        
-    except Exception as e:
-        return {
-            "found": True,
-            "player": canonical_name,
-            "points": {"dates": filtered_dates, "series": filtered_series},
-            "image_b64": None,
-            "error": str(e)
-        }
-
-    return {
-        "found": True,
-        "player": canonical_name,
-        "image_b64": img_b64,
-        "points": {"dates": filtered_dates, "series": filtered_series}
-    }
-
-def compare_players(
-    players: List[str],
-    stat: str = "goals",
-    seasons_back: int = DEFAULT_SEASONS_BACK,
-    player_col: str = "player",
-    season_col: str = "season"
-) -> Dict[str, Any]:
-    """
-    Compare multiple players on a single statistic.
-    NOW WITH FLEXIBLE NAME MATCHING!
-    
-    Returns dict with per-player aggregated stats.
-    """
-    df = _load_meta_df().copy()
-    df["_season_year"] = df[season_col].apply(season_to_year) if season_col in df.columns else None
-    
-    results = {}
-    for player_name in players:
-        # Use aggregate_player_stat which already has flexible matching
-        result = aggregate_player_stat(player_name, stat, seasons_back, player_col, season_col)
-        results[player_name] = result
-    
-    return {
-        "ok": True,
-        "stat": stat,
-        "seasons_back": seasons_back,
-        "players": results
-    }
-
-def filter_players(
-    team: Optional[str] = None,
-    position: Optional[str] = None,
-    seasons_back: int = DEFAULT_SEASONS_BACK,
-    player_col: str = "player",
-    team_cols_candidates: List[str] = None,
-    pos_col_candidates: List[str] = None
-) -> Dict[str, Any]:
-    """
-    Filter players by team and/or position.
-    
-    Returns dict with:
-    - ok: bool
-    - players: list of player names
-    - count: number of players found
-    """
-    df = _load_meta_df().copy()
-    
-    if team_cols_candidates is None:
-        team_cols_candidates = [c for c in df.columns if "team" in c.lower() or "club" in c.lower() or "squad" in c.lower()]
-    if pos_col_candidates is None:
-        pos_col_candidates = [c for c in df.columns if "pos" in c.lower() or "position" in c.lower()]
-
-    mask = pd.Series(True, index=df.index)
-    
-    # Filter by team
-    if team:
-        found_team_col = False
-        for tc in team_cols_candidates:
-            if tc in df.columns:
-                found_team_col = True
-                mask = mask & df[tc].astype(str).str.contains(team, case=False, na=False)
-        if not found_team_col and "rag_summary" in df.columns:
-            mask = mask & (
-                df["rag_summary"].astype(str).str.contains(team, case=False, na=False) |
-                df[player_col].astype(str).str.contains(team, case=False, na=False)
-            )
-
-    # Filter by position
-    if position:
-        pos_mask = pd.Series(False, index=df.index)
-        for pc in pos_col_candidates:
-            if pc in df.columns:
-                pos_mask = pos_mask | df[pc].astype(str).str.contains(position, case=False, na=False)
-        if not pos_mask.any() and "rag_summary" in df.columns:
-            pos_mask = df["rag_summary"].astype(str).str.contains(position, case=False, na=False)
-        mask = mask & pos_mask
-
-    # Filter by season recency
-    if "season" in df.columns:
-        df["_season_year"] = df["season"].apply(season_to_year)
-        if df["_season_year"].notna().any():
-            latest = int(df["_season_year"].max())
-            valid_years = [latest - i for i in range(seasons_back)]
-            mask = mask & df["_season_year"].isin(valid_years)
-
-    candidates = df[mask][player_col].dropna().astype(str).unique().tolist()
-
-    # Return all players - no arbitrary limit
-    # Performance is acceptable even with full player list
-    return {
-        "ok": True,
-        "players": candidates,
-        "count": len(candidates),
-        "limited": False
-    }
-
-def aggregate_group_stats(
-    players: List[str],
-    stat: str = "goals",
-    seasons_back: int = DEFAULT_SEASONS_BACK,
-    player_col: str = "player",
-    season_col: str = "season"
-) -> Dict[str, Any]:
-    """
-    Aggregate statistics for a group of players.
-    NOW WITH FLEXIBLE NAME MATCHING!
-    
-    Returns dict with per-player and total stats.
-    """
-    df = _load_meta_df().copy()
-    
-    if season_col in df.columns:
-        df["_season_year"] = df[season_col].apply(season_to_year)
-        latest_years = sorted(df["_season_year"].dropna().unique())[::-1]
-    else:
-        df["_season_year"] = None
-        latest_years = []
-
-    if latest_years:
-        years = [latest_years[0] - i for i in range(seasons_back)][::-1]
-    else:
-        labels = list(pd.Series(df[season_col].astype(str)).dropna().unique()) if season_col in df.columns else []
-        years = labels[-seasons_back:] if labels else []
-
-    totals = {y: 0.0 for y in years}
-    per_player = {}
-    
-    for player_name in players:
-        # CRITICAL FIX: Use flexible matching
-        mask = _flexible_player_match(df, player_name, player_col)
-        sel = df[mask].copy()
-        
-        if sel.empty:
-            per_player[player_name] = {"found": False}
-            continue
-        
-        # Get canonical name
-        canonical_name = sel[player_col].iloc[0]
-        
-        if season_col in sel.columns:
-            sel["_season_year"] = sel[season_col].apply(season_to_year)
-        
-        by_year = {}
-        for y in years:
-            if stat not in sel.columns:
-                v = None
-            else:
-                if isinstance(y, int):
-                    v = pd.to_numeric(sel.loc[sel["_season_year"] == y, stat], errors="coerce").sum(min_count=1)
-                else:
-                    v = pd.to_numeric(sel.loc[sel[season_col] == y, stat], errors="coerce").sum(min_count=1)
-                v = None if pd.isna(v) else float(v)
-            by_year[y] = v
-            if v is not None:
-                totals[y] += float(v)
-        
-        per_player[canonical_name] = {"found": True, "per_season": by_year}
-    
-    return {
-        "ok": True,
-        "players": players,
-        "requested_seasons": years,
-        "per_player": per_player,
-        "totals": totals
-    }
-
-def plot_group(
-    players: List[str],
-    metrics: List[str] = None,
-    seasons_back: int = DEFAULT_SEASONS_BACK,
-    player_col: str = "player",
-    season_col: str = "season"
-) -> Dict[str, Any]:
-    """
-    Plot group comparison with time-series and radar chart.
-    NOW WITH FLEXIBLE NAME MATCHING!
-    
-    Returns dict with image_b64 and data tables.
-    """
-    df = _load_meta_df().copy()
-    
-    if season_col in df.columns:
-        df["_season_year"] = df[season_col].apply(season_to_year)
-    else:
-        df["_season_year"] = None
-
-    if metrics is None or not metrics:
-        metrics = candidate_metrics_from_df(df)[:3] or ["goals_per_90", "xg_per_90"]
-
-    if df["_season_year"].notna().any():
-        all_years = sorted(df["_season_year"].dropna().unique())[::-1]
-        chosen_years = all_years[:seasons_back][::-1] if all_years else []
-    else:
-        labels = list(pd.Series(df[season_col].astype(str)).dropna().unique()) if season_col in df.columns else []
-        chosen_years = labels[-seasons_back:] if labels else []
-
-    series_table = {}
-    canonical_names = {}
-    
-    for player_name in players:
-        # CRITICAL FIX: Use flexible matching
-        mask = _flexible_player_match(df, player_name, player_col)
-        sel = df[mask].copy()
-        
-        if sel.empty:
-            series_table[player_name] = {"found": False}
-            canonical_names[player_name] = player_name
-            continue
-        
-        # Get canonical name
-        canonical_name = sel[player_col].iloc[0]
-        canonical_names[player_name] = canonical_name
-        
-        if season_col in sel.columns:
-            sel["_season_year"] = sel[season_col].apply(season_to_year)
-        sel = sel.sort_values("_season_year") if "_season_year" in sel.columns else sel.sort_index()
-        
-        primary = metrics[0]
-        series_vals = []
-        for y in chosen_years:
-            if primary in sel.columns:
-                if isinstance(y, int):
-                    v = pd.to_numeric(sel.loc[sel["_season_year"] == y, primary], errors="coerce").sum(min_count=1)
-                else:
-                    v = pd.to_numeric(sel.loc[sel[season_col] == y, primary], errors="coerce").sum(min_count=1)
-                v = None if pd.isna(v) else float(v)
-            else:
-                v = None
-            series_vals.append(v)
-        series_table[canonical_name] = {"found": True, "series": series_vals}
-
-    latest = chosen_years[-1] if chosen_years else None
-    percentiles = {}
-    
-    for m in metrics:
-        if m in df.columns:
-            col_vals = pd.to_numeric(df[m], errors="coerce").dropna().values
-        else:
-            col_vals = np.array([])
-        
-        for player_name in players:
-            canonical_name = canonical_names.get(player_name, player_name)
-            
-            if not series_table.get(canonical_name, {}).get("found"):
-                percentiles.setdefault(canonical_name, {})[m] = None
-                continue
-            
-            mask = _flexible_player_match(df, player_name, player_col)
-            sel = df[mask].copy()
-            
-            if latest is not None and "_season_year" in sel.columns and isinstance(latest, int):
-                if m in sel.columns:
-                    row_val = pd.to_numeric(sel.loc[sel["_season_year"] == latest, m], errors="coerce").sum(min_count=1)
-                else:
-                    row_val = None
-            else:
-                if m in sel.columns and not sel[m].dropna().empty:
-                    row_val = pd.to_numeric(sel[m].dropna().iloc[-1], errors="coerce")
-                else:
-                    row_val = None
-            
-            if row_val is None or (isinstance(row_val, float) and np.isnan(row_val)) or len(col_vals) == 0:
-                percentiles.setdefault(canonical_name, {})[m] = None
-            else:
-                percentiles.setdefault(canonical_name, {})[m] = float((col_vals <= float(row_val)).sum()) / float(len(col_vals)) * 100.0
-
-    # Create visualization
-    try:
-        import matplotlib
-        matplotlib.use("Agg")
-        import matplotlib.pyplot as plt
-
-        fig = plt.figure(figsize=(12, 6))
-        
-        # Time series plot
-        ax1 = fig.add_subplot(1, 2, 1)
-        if chosen_years:
-            x = list(range(len(chosen_years)))
-            for player_name in players:
-                canonical_name = canonical_names.get(player_name, player_name)
-                if not series_table.get(canonical_name, {}).get("found"):
-                    continue
-                ax1.plot(x, series_table[canonical_name]["series"], marker="o", label=canonical_name)
-            ax1.set_xticks(x)
-            ax1.set_xticklabels([str(y) for y in chosen_years], rotation=30)
-        else:
-            for player_name in players:
-                canonical_name = canonical_names.get(player_name, player_name)
-                if not series_table.get(canonical_name, {}).get("found"):
-                    continue
-                vals = series_table[canonical_name]["series"]
-                ax1.plot(list(range(len(vals))), vals, marker="o", label=canonical_name)
-        
-        ax1.set_title(f"Group time-series ({metrics[0]})")
-        ax1.grid(True)
-        ax1.legend(fontsize="small")
-
-        # Radar plot
-        ax2 = fig.add_subplot(1, 2, 2, polar=True)
-        theta = np.linspace(0, 2 * np.pi, len(metrics), endpoint=False)
-        
-        for player_name in players:
-            canonical_name = canonical_names.get(player_name, player_name)
-            if not percentiles.get(canonical_name):
-                continue
-            vals = [percentiles[canonical_name].get(m, 0.0) or 0.0 for m in metrics]
-            vals_closed = vals + [vals[0]]
-            theta_closed = np.concatenate((theta, [theta[0]]))
-            ax2.plot(theta_closed, vals_closed, marker="o", label=canonical_name)
-            ax2.fill(theta_closed, vals_closed, alpha=0.12)
-        
-        ax2.set_xticks(theta)
-        ax2.set_xticklabels(metrics, fontsize=9)
-        ax2.set_yticks([20, 40, 60, 80, 100])
-        ax2.set_ylim(0, 100)
-        ax2.set_title("Latest-season percentiles (0-100)")
-        ax2.legend(loc="upper right", bbox_to_anchor=(1.4, 1.05), fontsize="small")
-
-        fig.tight_layout()
-        buf = io.BytesIO()
-        fig.savefig(buf, format="png", dpi=150)
-        buf.seek(0)
-        img_b64 = base64.b64encode(buf.read()).decode("ascii")
-        plt.close(fig)
-        
-    except Exception as e:
-        return {
-            "ok": False,
-            "error": "plot_error",
-            "detail": str(e),
-            "players": players,
-            "chosen_seasons": chosen_years,
-            "series_table": series_table,
-            "percentiles": percentiles
-        }
-
-    return {
-        "ok": True,
-        "players": [canonical_names.get(p, p) for p in players],
-        "chosen_seasons": chosen_years,
-        "image_b64": img_b64,
-        "series_table": series_table,
-        "percentiles": percentiles
-    }
-
-
-# ============================================================================
-# ADDITIONAL UTILITY FUNCTIONS
-# ============================================================================
-
-def get_player_info(
-    player_name: str,
-    player_col: str = "player",
-    season_col: str = "season"
-) -> Dict[str, Any]:
-    """
-    Get basic information about a player.
-    Returns biographical info and recent stats.
-    """
-    df = _load_meta_df().copy()
-    
-    mask = _flexible_player_match(df, player_name, player_col)
-    sel = df[mask].copy()
-    
-    if sel.empty:
-        return {
-            "found": False,
-            "message": f"Player '{player_name}' not found"
-        }
-    
-    canonical_name = sel[player_col].iloc[0]
-    
-    # Get most recent row
-    if season_col in sel.columns:
-        sel["_season_year"] = sel[season_col].apply(season_to_year)
-        if sel["_season_year"].notna().any():
-            latest_row = sel.loc[sel["_season_year"] == sel["_season_year"].max()].iloc[0]
-        else:
-            latest_row = sel.iloc[-1]
-    else:
-        latest_row = sel.iloc[-1]
-    
-    info = {
-        "found": True,
-        "player": canonical_name,
-        "latest_season": latest_row.get(season_col) if season_col in latest_row else None,
-    }
-    
-    # Add available biographical fields
-    bio_fields = ["nation", "pos", "squad", "comp", "age_stats", "born"]
-    for field in bio_fields:
-        if field in latest_row and pd.notna(latest_row[field]):
-            info[field] = latest_row[field]
-    
-    # Add rag_summary if available
-    if "rag_summary" in latest_row and pd.notna(latest_row["rag_summary"]):
-        info["summary"] = str(latest_row["rag_summary"])[:500]
-    
-    return info
-
-
-def get_top_players(
-    stat: str = "goals",
-    n: int = 10,
-    season: Optional[str] = None,
-    player_col: str = "player",
-    season_col: str = "season"
-) -> Dict[str, Any]:
-    """
-    Get top N players by a statistic.
-    Optionally filter by season.
-    """
-    df = _load_meta_df().copy()
-    
-    if stat not in df.columns:
-        return {
-            "ok": False,
-            "error": f"Stat '{stat}' not found in dataset"
-        }
-    
-    # Filter by season if specified
-    if season and season_col in df.columns:
-        df = df[df[season_col].astype(str).str.contains(str(season), na=False)]
-    
-    # Aggregate by player
-    player_totals = df.groupby(player_col)[stat].sum().sort_values(ascending=False)
-    
-    top_players = []
-    for player, value in player_totals.head(n).items():
-        top_players.append({
-            "player": player,
-            stat: float(value) if not pd.isna(value) else None
-        })
-    
-    return {
-        "ok": True,
-        "stat": stat,
-        "season": season,
-        "top_players": top_players
-    }
-
-
-def get_player_percentile(
-    player_name: str,
-    stat: str = "goals_per_90",
-    season: Optional[str] = None,
-    player_col: str = "player",
-    season_col: str = "season"
-) -> Dict[str, Any]:
-    """
-    Calculate a player's percentile rank for a statistic.
-    """
-    df = _load_meta_df().copy()
-    
-    if stat not in df.columns:
-        return {
-            "ok": False,
-            "error": f"Stat '{stat}' not found in dataset"
-        }
-    
-    # Filter by season if specified
-    if season and season_col in df.columns:
-        df = df[df[season_col].astype(str).str.contains(str(season), na=False)]
-    
-    # Get player's value
-    mask = _flexible_player_match(df, player_name, player_col)
-    player_rows = df[mask]
-    
-    if player_rows.empty:
-        return {
-            "ok": False,
-            "error": f"Player '{player_name}' not found"
-        }
-    
-    canonical_name = player_rows[player_col].iloc[0]
-    player_value = pd.to_numeric(player_rows[stat], errors="coerce").mean()
-    
-    if pd.isna(player_value):
-        return {
-            "ok": False,
-            "error": f"No data for {stat} for player {canonical_name}"
-        }
-    
-    # Calculate percentile
-    all_values = pd.to_numeric(df[stat], errors="coerce").dropna()
-    percentile = float((all_values <= player_value).sum()) / float(len(all_values)) * 100.0
-    
-    return {
-        "ok": True,
-        "player": canonical_name,
-        "stat": stat,
-        "value": float(player_value),
-        "percentile": float(percentile),
-        "season": season,
-        "sample_size": len(all_values)
-    }
-
-
-def get_similar_players(
-    player_name: str,
-    n: int = 5,
-    metrics: List[str] = None,
-    player_col: str = "player",
-    season_col: str = "season"
-) -> Dict[str, Any]:
-    """
-    Find players with similar statistical profiles.
-    Uses Euclidean distance in normalized metric space.
-    """
-    df = _load_meta_df().copy()
-    
-    if metrics is None:
-        metrics = ["goals_per_90", "assists_per_90", "xg_per_90", "xag_per_90"]
-    
-    # Filter to metrics that exist
-    metrics = [m for m in metrics if m in df.columns]
-    if not metrics:
-        return {
-            "ok": False,
-            "error": "None of the specified metrics exist in dataset"
-        }
-    
-    # Get player's profile
-    mask = _flexible_player_match(df, player_name, player_col)
-    player_rows = df[mask]
-    
-    if player_rows.empty:
-        return {
-            "ok": False,
-            "error": f"Player '{player_name}' not found"
-        }
-    
-    canonical_name = player_rows[player_col].iloc[0]
-    
-    # Get most recent season data
-    if season_col in player_rows.columns:
-        player_rows["_season_year"] = player_rows[season_col].apply(season_to_year)
-        if player_rows["_season_year"].notna().any():
-            player_row = player_rows.loc[player_rows["_season_year"] == player_rows["_season_year"].max()].iloc[0]
-        else:
-            player_row = player_rows.iloc[-1]
-    else:
-        player_row = player_rows.iloc[-1]
-    
-    player_values = []
-    for m in metrics:
-        val = pd.to_numeric(player_row.get(m), errors="coerce")
-        if pd.isna(val):
-            player_values.append(0.0)
-        else:
-            player_values.append(float(val))
-    
-    player_vector = np.array(player_values)
-    
-    # Calculate distances to all other players
-    similarities = []
-    for idx, row in df.iterrows():
-        other_name = row[player_col]
-        if other_name == canonical_name:
-            continue
-        
-        other_values = []
-        for m in metrics:
-            val = pd.to_numeric(row.get(m), errors="coerce")
-            if pd.isna(val):
-                other_values.append(0.0)
-            else:
-                other_values.append(float(val))
-        
-        other_vector = np.array(other_values)
-        
-        # Euclidean distance
-        distance = np.linalg.norm(player_vector - other_vector)
-        similarities.append({
-            "player": other_name,
-            "distance": float(distance),
-            "season": row.get(season_col)
-        })
-    
-    # Sort by distance and take top N
-    similarities.sort(key=lambda x: x["distance"])
-    
-    return {
-        "ok": True,
-        "player": canonical_name,
-        "metrics": metrics,
-        "similar_players": similarities[:n]
-    }
-
+            logger.error(f"Fallback search failed: {e2}")
+            return []
 
 def rank_players(
     stat: str = "goals",
@@ -1698,284 +429,600 @@ def rank_players(
     team: Optional[str] = None,
     position: Optional[str] = None,
     season_year: Optional[int] = None,
-    seasons_back: int = DEFAULT_SEASONS_BACK,
-    player_col: str = "player",
-    season_col: str = "season"
+    seasons_back: Optional[int] = None
 ) -> Dict[str, Any]:
-    """
-    FAST bulk ranking of players by a statistic.
-
-    This function does aggregation in pandas instead of making individual MCP calls,
-    making it 100x faster for ranking queries.
-
-    Args:
-        stat: The statistic to rank by (e.g., "goals", "assists", "gross_p_w_eur")
-        top_n: Number of top players to return
-        team: Optional team filter
-        position: Optional position filter
-        season_year: Optional specific season year (e.g., 2023)
-        seasons_back: Number of seasons to look back if season_year not specified
-        player_col: Column name for player names
-        season_col: Column name for season data
-
-    Returns:
-        Dict with:
-        - ok: bool
-        - stat: the statistic name
-        - rankings: list of {player, value, rank}
-        - filters: dict of applied filters
-    """
-    df = _load_meta_df().copy()
-
-    if stat not in df.columns:
-        return {
-            "ok": False,
-            "error": f"Stat '{stat}' not found in dataset",
-            "available_stats": list(df.select_dtypes(include=["number"]).columns[:20])
-        }
-
-    # Add season_year column
-    df["_season_year"] = df[season_col].apply(season_to_year) if season_col in df.columns else None
-
-    # Apply filters
-    mask = pd.Series(True, index=df.index)
-
-    # Team filter
-    if team:
-        team_cols = [c for c in df.columns if "team" in c.lower() or "club" in c.lower() or "squad" in c.lower()]
-        team_mask = pd.Series(False, index=df.index)
-        for tc in team_cols:
-            if tc in df.columns:
-                team_mask = team_mask | df[tc].astype(str).str.contains(team, case=False, na=False)
-        mask = mask & team_mask
-
-    # Position filter
-    if position:
-        pos_cols = [c for c in df.columns if "pos" in c.lower() or "position" in c.lower()]
-        pos_mask = pd.Series(False, index=df.index)
-        for pc in pos_cols:
-            if pc in df.columns:
-                pos_mask = pos_mask | df[pc].astype(str).str.contains(position, case=False, na=False)
-        mask = mask & pos_mask
-
-    # Season filter
-    if season_year:
-        # Filter to specific year
-        if df["_season_year"].notna().any():
-            mask = mask & (df["_season_year"] == season_year)
-    else:
-        # Filter to last N seasons
-        if df["_season_year"].notna().any():
-            latest = int(df["_season_year"].max())
-            valid_years = [latest - i for i in range(seasons_back)]
-            mask = mask & df["_season_year"].isin(valid_years)
-
-    # Filter data
-    filtered_df = df[mask].copy()
-
-    if filtered_df.empty:
-        return {
-            "ok": False,
-            "error": "No players found matching filters",
-            "filters": {"team": team, "position": position, "season_year": season_year}
-        }
-
-    # Aggregate by player (sum stat values across filtered seasons/rows)
-    player_totals = filtered_df.groupby(player_col)[stat].sum().sort_values(ascending=False)
-
-    # Get top N
-    top_players = player_totals.head(top_n)
-
-    rankings = []
-    for rank, (player, value) in enumerate(top_players.items(), 1):
-        rankings.append({
-            "rank": rank,
-            "player": player,
-            "value": float(value) if not pd.isna(value) else None
-        })
-
-    return {
-        "ok": True,
-        "stat": stat,
-        "rankings": rankings,
-        "filters": {
-            "team": team,
-            "position": position,
-            "season_year": season_year,
-            "seasons_back": seasons_back if not season_year else None
-        },
-        "total_players_evaluated": len(player_totals)
-    }
-
-
-def aggregate_group_multi_metrics(
-    players: List[str],
-    metrics: List[str],
-    seasons_back: int = DEFAULT_SEASONS_BACK,
-    include_cohort: bool = True,
-    cohort_size: int = 200,
-    player_col: str = "player",
-    season_col: str = "season"
-) -> Dict[str, Any]:
-    """
-    FAST bulk aggregation of multiple metrics for multiple players.
-
-    Instead of making N_players × N_metrics individual calls, this does
-    ONE pandas operation to get all data at once.
-
-    Args:
-        players: List of player names to aggregate
-        metrics: List of metrics to aggregate (e.g., ["goals", "assists", "shots"])
-        seasons_back: Number of seasons to look back
-        include_cohort: If True, also return cohort statistics for percentile calculations
-        cohort_size: Number of players to include in cohort
-        player_col: Column name for player names
-        season_col: Column name for season data
-
-    Returns:
-        Dict with:
-        - ok: bool
-        - players: {player_name: {per_season: {...}, totals: {...}, latest: {...}}}
-        - cohort: {metric: {values: [...], percentiles: {...}}} (if include_cohort=True)
-    """
-    df = _load_meta_df().copy()
-
-    # Validate metrics exist
-    available_metrics = [m for m in metrics if m in df.columns]
-    if not available_metrics:
-        return {
-            "ok": False,
-            "error": f"None of the requested metrics found in dataset",
-            "requested": metrics,
-            "available": list(df.select_dtypes(include=["number"]).columns[:20])
-        }
-
-    # Add season_year column
-    if season_col in df.columns:
-        df["_season_year"] = df[season_col].apply(season_to_year)
-        latest_years = sorted(df["_season_year"].dropna().unique())[::-1][:seasons_back]
-    else:
-        df["_season_year"] = None
-        latest_years = []
-
-    # Filter to relevant seasons
-    if latest_years:
-        season_mask = df["_season_year"].isin(latest_years)
-        filtered_df = df[season_mask].copy()
-    else:
-        filtered_df = df.copy()
-
-    # Build results for each player
-    results = {}
-
-    for player_name in players:
-        # Use flexible matching
-        mask = _flexible_player_match(filtered_df, player_name, player_col)
-        player_df = filtered_df[mask]
-
-        if player_df.empty:
-            results[player_name] = {
-                "found": False,
-                "per_season": {},
-                "totals": {},
-                "latest": {}
+    """Fast bulk ranking with comprehensive error handling and filtering."""
+    if seasons_back is None:
+        seasons_back = get_default_seasons_back()
+    
+    try:
+        df = _load_dataframe()
+        
+        # Validate stat column
+        if stat not in df.columns:
+            numeric_cols = list(df.select_dtypes(include=[np.number]).columns)
+            return {
+                "ok": False,
+                "error": f"Stat '{stat}' not found in dataset",
+                "available_stats": numeric_cols[:20]
             }
-            continue
-
-        # Get canonical name
-        canonical_name = player_df[player_col].iloc[0]
-
-        # Aggregate by season
-        per_season = {}
-        for year in latest_years:
-            year_df = player_df[player_df["_season_year"] == year]
-            season_stats = {}
-
-            for metric in available_metrics:
-                value = pd.to_numeric(year_df[metric], errors='coerce').sum()
-                season_stats[metric] = float(value) if not pd.isna(value) else 0.0
-
-            # Convert numpy int64 to Python int for JSON serialization
-            per_season[int(year)] = season_stats
-
-        # Calculate totals across all seasons
-        totals = {}
-        for metric in available_metrics:
-            total = pd.to_numeric(player_df[metric], errors='coerce').sum()
-            totals[metric] = float(total) if not pd.isna(total) else 0.0
-
-        # Get latest season stats
-        latest = {}
-        if latest_years:
-            latest_year_df = player_df[player_df["_season_year"] == latest_years[0]]
-            for metric in available_metrics:
-                value = pd.to_numeric(latest_year_df[metric], errors='coerce').sum()
-                latest[metric] = float(value) if not pd.isna(value) else 0.0
-
-        results[canonical_name] = {
-            "found": True,
-            "per_season": per_season,
-            "totals": totals,
-            "latest": latest
+        
+        # Add season year column with proper error handling
+        df["_season_year"] = df["season"].apply(season_to_year)
+        
+        # Initialize filter mask
+        mask = pd.Series([True] * len(df), index=df.index, dtype=bool)
+        
+        # Team filter with comprehensive column search
+        if team:
+            team_cols = [c for c in df.columns 
+                        if any(keyword in c.lower() 
+                              for keyword in ['team', 'club', 'squad', 'side'])]
+            
+            if team_cols:
+                team_mask = pd.Series([False] * len(df), index=df.index, dtype=bool)
+                for col in team_cols:
+                    try:
+                        team_mask |= df[col].astype(str).str.contains(
+                            team, case=False, na=False, regex=False
+                        )
+                    except Exception as e:
+                        logger.warning(f"Error filtering by team column {col}: {e}")
+                mask &= team_mask
+            else:
+                logger.warning(f"No team columns found for filtering by '{team}'")
+        
+        # Position filter with comprehensive mapping
+        if position:
+            position_codes = _normalize_position(position)
+            pos_cols = [c for c in df.columns 
+                       if any(keyword in c.lower() 
+                             for keyword in ['pos', 'position', 'role'])]
+            
+            if pos_cols and position_codes:
+                pos_mask = pd.Series([False] * len(df), index=df.index, dtype=bool)
+                for col in pos_cols:
+                    try:
+                        for code in position_codes:
+                            pos_mask |= df[col].astype(str).str.contains(
+                                code, case=False, na=False, regex=False
+                            )
+                    except Exception as e:
+                        logger.warning(f"Error filtering by position column {col}: {e}")
+                mask &= pos_mask
+            else:
+                if not pos_cols:
+                    logger.warning(f"No position columns found for filtering by '{position}'")
+                if not position_codes:
+                    logger.warning(f"Position '{position}' not recognized")
+        
+        # Season filter
+        if season_year:
+            mask &= (df["_season_year"] == season_year)
+        else:
+            # Filter to recent seasons
+            valid_years = df["_season_year"].dropna()
+            if not valid_years.empty:
+                latest_year = int(valid_years.max())
+                season_range = [latest_year - i for i in range(seasons_back)]
+                mask &= df["_season_year"].isin(season_range)
+        
+        # Apply filters
+        filtered_df = df[mask].copy()
+        
+        if filtered_df.empty:
+            return {
+                "ok": False,
+                "error": "No players found matching the specified filters",
+                "filters_applied": {
+                    "team": team,
+                    "position": position,
+                    "season_year": season_year,
+                    "seasons_back": seasons_back
+                }
+            }
+        
+        # Ensure numeric data and handle missing values properly
+        stat_series = pd.to_numeric(filtered_df[stat], errors='coerce')
+        
+        # Group by player and sum (handling NaN properly)
+        player_totals = stat_series.groupby(filtered_df["player"]).sum()
+        
+        # Remove players with no valid data
+        player_totals = player_totals[player_totals.notna() & (player_totals > 0)]
+        
+        if player_totals.empty:
+            return {
+                "ok": False,
+                "error": f"No players found with valid '{stat}' data",
+                "filters_applied": {
+                    "team": team,
+                    "position": position,
+                    "season_year": season_year,
+                    "seasons_back": seasons_back
+                }
+            }
+        
+        # Sort and get top N
+        top_players = player_totals.sort_values(ascending=False).head(top_n)
+        
+        # Build rankings
+        rankings = []
+        for rank, (player, value) in enumerate(top_players.items(), 1):
+            rankings.append({
+                "rank": rank,
+                "player": player,
+                "value": float(value)
+            })
+        
+        return {
+            "ok": True,
+            "stat": stat,
+            "rankings": rankings,
+            "filters": {
+                "team": team,
+                "position": position,
+                "season_year": season_year,
+                "seasons_back": seasons_back if not season_year else None
+            },
+            "total_players_evaluated": len(player_totals)
+        }
+        
+    except Exception as e:
+        logger.error(f"Ranking failed: {e}")
+        return {
+            "ok": False,
+            "error": f"Ranking operation failed: {str(e)}"
         }
 
-    response = {
-        "ok": True,
-        "players": results,
-        "seasons": [int(y) for y in latest_years],  # Convert numpy int64 to Python int
-        "metrics": available_metrics
-    }
+def aggregate_player_stat(
+    player_name: str,
+    stat: str = "goals",
+    seasons_back: Optional[int] = None,
+    player_col: str = "player",
+    season_col: str = "season"
+) -> Dict[str, Any]:
+    """Get player statistics with flexible name matching and proper error handling."""
+    if seasons_back is None:
+        seasons_back = get_default_seasons_back()
+    
+    try:
+        df = _load_dataframe()
+        
+        # Validate required columns
+        if season_col not in df.columns:
+            return {
+                "found": False,
+                "error": f"Season column '{season_col}' not found in dataset"
+            }
+        
+        if player_col not in df.columns:
+            return {
+                "found": False,
+                "error": f"Player column '{player_col}' not found in dataset"
+            }
+        
+        # Add season year column
+        df["_season_year"] = df[season_col].apply(season_to_year)
+        
+        # Use flexible player matching
+        mask = _flexible_player_match(df, player_name, player_col)
+        player_data = df[mask & df["_season_year"].notna()].copy()
+        
+        if player_data.empty:
+            # Try to find similar players for suggestions
+            similar_mask = df[player_col].astype(str).str.contains(
+                player_name, case=False, na=False, regex=False
+            )
+            suggestions = df[similar_mask][player_col].unique()[:5].tolist()
+            
+            return {
+                "found": False,
+                "message": f"Player '{player_name}' not found",
+                "suggestions": suggestions
+            }
+        
+        # Get canonical player name
+        canonical_name = player_data[player_col].iloc[0]
+        
+        # Validate stat column
+        if stat not in player_data.columns:
+            available_stats = list(player_data.select_dtypes(include=[np.number]).columns)
+            return {
+                "found": True,
+                "player": canonical_name,
+                "error": f"Stat '{stat}' not available for this player",
+                "available_stats": available_stats[:10]
+            }
+        
+        # Calculate statistics
+        latest_year = int(player_data["_season_year"].max())
+        requested_years = [latest_year - i for i in range(seasons_back)][::-1]
+        
+        # Group by season and sum values
+        season_data = player_data.groupby("_season_year")[stat].sum()
+        
+        per_season = []
+        total = 0.0
+        seasons_with_data = 0
+        
+        for year in requested_years:
+            value = season_data.get(year)
+            if pd.notna(value) and value != 0:
+                per_season.append({"season_year": year, "value": float(value)})
+                total += float(value)
+                seasons_with_data += 1
+            else:
+                per_season.append({"season_year": year, "value": None})
+        
+        return {
+            "found": True,
+            "player": canonical_name,
+            "stat": stat,
+            "per_season": per_season,
+            "total": total,
+            "latest_season": latest_year,
+            "seasons_with_data": seasons_with_data,
+            "has_consecutive_n": seasons_with_data == seasons_back
+        }
+        
+    except Exception as e:
+        logger.error(f"Aggregate failed for player '{player_name}': {e}")
+        return {
+            "found": False,
+            "error": f"Failed to aggregate stats: {str(e)}"
+        }
 
-    # Add cohort statistics if requested
-    if include_cohort and latest_years:
-        cohort_stats = {}
-        latest_year = latest_years[0]
-        latest_season_df = filtered_df[filtered_df["_season_year"] == latest_year]
+# MCP wrapper functions (maintaining compatibility)
+def rank_players_mcp(**kwargs) -> Dict[str, Any]:
+    """MCP wrapper for rank_players with parameter validation."""
+    try:
+        return rank_players(**kwargs)
+    except Exception as e:
+        logger.error(f"MCP rank_players failed: {e}")
+        return {
+            "ok": False,
+            "error": f"MCP ranking failed: {str(e)}"
+        }
 
-        for metric in available_metrics:
-            # Get all player values for this metric in latest season
-            player_stats = latest_season_df.groupby(player_col)[metric].sum()
-            cohort_values = pd.to_numeric(player_stats, errors='coerce').dropna()
+def aggregate_mcp(player_name: str, **kwargs) -> Dict[str, Any]:
+    """MCP wrapper for aggregate_player_stat."""
+    try:
+        return aggregate_player_stat(player_name, **kwargs)
+    except Exception as e:
+        logger.error(f"MCP aggregate failed for '{player_name}': {e}")
+        return {
+            "found": False,
+            "error": f"MCP aggregation failed: {str(e)}"
+        }
 
-            if len(cohort_values) > 0:
-                # Take top cohort_size by this metric
-                top_cohort = cohort_values.nlargest(cohort_size)
+def rag_search_mcp(query: str, k: int = None) -> List[Dict[str, Any]]:
+    """MCP wrapper for search_player."""
+    try:
+        return search_player(query, k)
+    except Exception as e:
+        logger.error(f"MCP search failed for '{query}': {e}")
+        return []
 
-                cohort_stats[metric] = {
-                    "values": top_cohort.tolist(),
-                    "count": len(top_cohort),
-                    "percentiles": {
-                        "25": float(top_cohort.quantile(0.25)),
-                        "50": float(top_cohort.quantile(0.50)),
-                        "75": float(top_cohort.quantile(0.75)),
-                        "90": float(top_cohort.quantile(0.90)),
-                        "max": float(top_cohort.max()),
-                        "min": float(top_cohort.min())
-                    }
-                }
-
-        response["cohort"] = cohort_stats
-
-    return response
-
-
-# ============================================================================
-# EXPORT ALL FUNCTIONS
-# ============================================================================
-
+# Export functions for langchain_agent compatibility
 __all__ = [
     "get_schema",
     "search_player",
-    "aggregate_player_stat",
-    "plot_player",
-    "compare_players",
-    "filter_players",
-    "aggregate_group_stats",
-    "plot_group",
-    "get_player_info",
-    "get_top_players",
-    "get_player_percentile",
-    "get_similar_players",
     "rank_players",
-    "aggregate_group_multi_metrics",  # NEW! Bulk multi-metric aggregation
+    "rank_players_mcp", 
+    "aggregate_player_stat",
+    "aggregate_mcp",
+    "rag_search_mcp"
 ]
+
+# Additional MCP functions required by langchain_agent.py
+
+def filter_players_mcp(
+    team: Optional[str] = None, 
+    position: Optional[str] = None, 
+    seasons_back: Optional[int] = None
+) -> Dict[str, Any]:
+    """Filter players by team and/or position."""
+    if seasons_back is None:
+        seasons_back = get_default_seasons_back()
+    
+    try:
+        df = _load_dataframe()
+        
+        # Initialize mask
+        mask = pd.Series([True] * len(df), index=df.index, dtype=bool)
+        
+        # Team filter
+        if team:
+            team_cols = [c for c in df.columns 
+                        if any(keyword in c.lower() 
+                              for keyword in ['team', 'club', 'squad', 'side'])]
+            if team_cols:
+                team_mask = pd.Series([False] * len(df), index=df.index, dtype=bool)
+                for col in team_cols:
+                    try:
+                        team_mask |= df[col].astype(str).str.contains(
+                            team, case=False, na=False, regex=False
+                        )
+                    except Exception as e:
+                        logger.warning(f"Error filtering by team column {col}: {e}")
+                mask &= team_mask
+        
+        # Position filter
+        if position:
+            position_codes = _normalize_position(position)
+            pos_cols = [c for c in df.columns 
+                       if any(keyword in c.lower() 
+                             for keyword in ['pos', 'position', 'role'])]
+            if pos_cols and position_codes:
+                pos_mask = pd.Series([False] * len(df), index=df.index, dtype=bool)
+                for col in pos_cols:
+                    try:
+                        for code in position_codes:
+                            pos_mask |= df[col].astype(str).str.contains(
+                                code, case=False, na=False, regex=False
+                            )
+                    except Exception as e:
+                        logger.warning(f"Error filtering by position column {col}: {e}")
+                mask &= pos_mask
+        
+        # Season filter
+        df["_season_year"] = df["season"].apply(season_to_year)
+        valid_years = df["_season_year"].dropna()
+        if not valid_years.empty:
+            latest_year = int(valid_years.max())
+            season_range = [latest_year - i for i in range(seasons_back)]
+            mask &= df["_season_year"].isin(season_range)
+        
+        # Get unique players
+        filtered_players = df[mask]["player"].dropna().unique().tolist()
+        
+        return {
+            "ok": True,
+            "players": filtered_players,
+            "count": len(filtered_players)
+        }
+        
+    except Exception as e:
+        logger.error(f"Filter players failed: {e}")
+        return {
+            "ok": False,
+            "error": f"Filter operation failed: {str(e)}"
+        }
+
+def plot_mcp(player_name: str, metrics: List[str]) -> Dict[str, Any]:
+    """Generate plot for player metrics (placeholder - plotting not implemented)."""
+    try:
+        # Get player data to validate
+        result = aggregate_player_stat(player_name, metrics[0] if metrics else "goals")
+        
+        if not result.get("found"):
+            return result
+        
+        # Plotting functionality would go here
+        # For now, return success without actual plot
+        return {
+            "ok": True,
+            "player": result["player"],
+            "metrics": metrics,
+            "message": "Plot generation not implemented in this version"
+        }
+        
+    except Exception as e:
+        logger.error(f"Plot MCP failed for '{player_name}': {e}")
+        return {
+            "ok": False,
+            "error": f"Plot generation failed: {str(e)}"
+        }
+
+def aggregate_group_mcp(
+    players: List[str], 
+    stat: str = "goals", 
+    seasons_back: Optional[int] = None
+) -> Dict[str, Any]:
+    """Aggregate statistics for a group of players."""
+    if seasons_back is None:
+        seasons_back = get_default_seasons_back()
+    
+    try:
+        results = {}
+        for player in players:
+            result = aggregate_player_stat(player, stat, seasons_back)
+            results[player] = result
+        
+        return {
+            "ok": True,
+            "stat": stat,
+            "seasons_back": seasons_back,
+            "players": results
+        }
+        
+    except Exception as e:
+        logger.error(f"Group aggregate failed: {e}")
+        return {
+            "ok": False,
+            "error": f"Group aggregation failed: {str(e)}"
+        }
+
+def plot_group_mcp(
+    players: List[str], 
+    metrics: Optional[List[str]] = None, 
+    seasons_back: Optional[int] = None
+) -> Dict[str, Any]:
+    """Generate group plot (placeholder - plotting not implemented)."""
+    if seasons_back is None:
+        seasons_back = get_default_seasons_back()
+    
+    if metrics is None:
+        metrics = ["goals"]
+    
+    try:
+        # Validate players exist
+        valid_players = []
+        for player in players:
+            result = aggregate_player_stat(player, metrics[0], seasons_back)
+            if result.get("found"):
+                valid_players.append(result["player"])
+        
+        return {
+            "ok": True,
+            "players": valid_players,
+            "metrics": metrics,
+            "seasons_back": seasons_back,
+            "message": "Group plot generation not implemented in this version"
+        }
+        
+    except Exception as e:
+        logger.error(f"Group plot failed: {e}")
+        return {
+            "ok": False,
+            "error": f"Group plot failed: {str(e)}"
+        }
+
+def get_schema_mcp() -> Optional[List[str]]:
+    """Get dataset schema (MCP wrapper)."""
+    try:
+        return get_schema()
+    except Exception as e:
+        logger.error(f"Schema MCP failed: {e}")
+        return None
+
+def aggregate_group_multi_metrics_mcp(
+    players: List[str],
+    metrics: List[str],
+    seasons_back: Optional[int] = None,
+    include_cohort: bool = True,
+    cohort_size: int = 200
+) -> Dict[str, Any]:
+    """Bulk aggregation of multiple metrics for multiple players."""
+    if seasons_back is None:
+        seasons_back = get_default_seasons_back()
+    
+    try:
+        df = _load_dataframe()
+        
+        # Validate metrics
+        available_metrics = [m for m in metrics if m in df.columns]
+        if not available_metrics:
+            return {
+                "ok": False,
+                "error": "None of the requested metrics found in dataset",
+                "requested": metrics,
+                "available": list(df.select_dtypes(include=[np.number]).columns[:20])
+            }
+        
+        # Add season year column
+        df["_season_year"] = df["season"].apply(season_to_year)
+        
+        # Get recent seasons
+        valid_years = df["_season_year"].dropna()
+        if valid_years.empty:
+            return {
+                "ok": False,
+                "error": "No valid season data found"
+            }
+        
+        latest_years = sorted(valid_years.unique())[-seasons_back:]
+        season_mask = df["_season_year"].isin(latest_years)
+        filtered_df = df[season_mask].copy()
+        
+        # Build results for each player
+        results = {}
+        for player_name in players:
+            mask = _flexible_player_match(filtered_df, player_name)
+            player_df = filtered_df[mask]
+            
+            if player_df.empty:
+                results[player_name] = {
+                    "found": False,
+                    "per_season": {},
+                    "totals": {},
+                    "latest": {}
+                }
+                continue
+            
+            canonical_name = player_df["player"].iloc[0]
+            
+            # Aggregate by season
+            per_season = {}
+            for year in latest_years:
+                year_df = player_df[player_df["_season_year"] == year]
+                season_stats = {}
+                for metric in available_metrics:
+                    value = pd.to_numeric(year_df[metric], errors='coerce').sum()
+                    season_stats[metric] = float(value) if pd.notna(value) else 0.0
+                per_season[int(year)] = season_stats
+            
+            # Calculate totals
+            totals = {}
+            for metric in available_metrics:
+                total = pd.to_numeric(player_df[metric], errors='coerce').sum()
+                totals[metric] = float(total) if pd.notna(total) else 0.0
+            
+            # Get latest season stats
+            latest = {}
+            if latest_years:
+                latest_year_df = player_df[player_df["_season_year"] == latest_years[-1]]
+                for metric in available_metrics:
+                    value = pd.to_numeric(latest_year_df[metric], errors='coerce').sum()
+                    latest[metric] = float(value) if pd.notna(value) else 0.0
+            
+            results[canonical_name] = {
+                "found": True,
+                "per_season": per_season,
+                "totals": totals,
+                "latest": latest
+            }
+        
+        response = {
+            "ok": True,
+            "players": results,
+            "seasons": [int(y) for y in latest_years],
+            "metrics": available_metrics
+        }
+        
+        # Add cohort statistics if requested
+        if include_cohort and latest_years:
+            cohort_stats = {}
+            latest_year = latest_years[-1]
+            latest_season_df = filtered_df[filtered_df["_season_year"] == latest_year]
+            
+            for metric in available_metrics:
+                player_stats = latest_season_df.groupby("player")[metric].sum()
+                cohort_values = pd.to_numeric(player_stats, errors='coerce').dropna()
+                
+                if len(cohort_values) > 0:
+                    top_cohort = cohort_values.nlargest(cohort_size)
+                    cohort_stats[metric] = {
+                        "values": top_cohort.tolist(),
+                        "count": len(top_cohort),
+                        "percentiles": {
+                            "25": float(top_cohort.quantile(0.25)),
+                            "50": float(top_cohort.quantile(0.50)),
+                            "75": float(top_cohort.quantile(0.75)),
+                            "90": float(top_cohort.quantile(0.90)),
+                            "max": float(top_cohort.max()),
+                            "min": float(top_cohort.min())
+                        }
+                    }
+            
+            response["cohort"] = cohort_stats
+        
+        return response
+        
+    except Exception as e:
+        logger.error(f"Multi-metrics aggregation failed: {e}")
+        return {
+            "ok": False,
+            "error": f"Multi-metrics aggregation failed: {str(e)}"
+        }
+
+# Update exports
+__all__.extend([
+    "filter_players_mcp",
+    "plot_mcp", 
+    "aggregate_group_mcp",
+    "plot_group_mcp",
+    "get_schema_mcp",
+    "aggregate_group_multi_metrics_mcp"
+])

@@ -56,19 +56,26 @@ async def run_agent_query(query: str) -> AsyncGenerator[dict, None]:
     import time
     from contextlib import redirect_stdout
 
-    # Import the agent module
-    from scripts.langchain_agent import handle_input
+    # Import the agent module (use safe wrapper to prevent crashes)
+    from scripts.langchain_agent import handle_input_safe
+
+    # Get project root directory (where PNG files are created)
+    project_root = Path(__file__).parent.parent
+    png_pattern = str(project_root / "*.png")
 
     # Track existing images before running agent
-    existing_images = set(glob.glob('*.png'))
+    existing_images = set(glob.glob(png_pattern))
+    print(f"[DEBUG] Project root: {project_root}")
+    print(f"[DEBUG] PNG pattern: {png_pattern}")
+    print(f"[DEBUG] Existing images before query: {existing_images}")
 
     # Capture stdout to intercept agent output
     output_buffer = io.StringIO()
 
     try:
         with redirect_stdout(output_buffer):
-            # Call the agent directly (maintains CONTEXT between calls)
-            handle_input(query)
+            # Call the agent with safe wrapper (catches exceptions to prevent crashes)
+            handle_input_safe(query)
 
         # Get all output
         output_text = output_buffer.getvalue()
@@ -85,23 +92,28 @@ async def run_agent_query(query: str) -> AsyncGenerator[dict, None]:
                     }
 
         # Find newly created images
-        current_images = set(glob.glob('*.png'))
+        current_images = set(glob.glob(png_pattern))
         new_images = current_images - existing_images
+
+        print(f"[DEBUG] Current images after query: {current_images}")
+        print(f"[DEBUG] New images detected: {new_images}")
 
         # Send all newly created images
         for image_path in new_images:
+            print(f"[DEBUG] Processing image: {image_path}")
             if os.path.exists(image_path):
                 try:
                     # Read and encode image as base64
                     with open(image_path, 'rb') as img_file:
                         img_data = base64.b64encode(img_file.read()).decode('utf-8')
+                        print(f"[DEBUG] Successfully encoded image {image_path} ({len(img_data)} bytes base64)")
                         yield {
                             "type": "image",
-                            "filename": image_path,
+                            "filename": os.path.basename(image_path),
                             "data": img_data
                         }
                 except Exception as e:
-                    print(f"Error reading image {image_path}: {e}")
+                    print(f"[DEBUG] Error reading image {image_path}: {e}")
 
     except Exception as e:
         yield {

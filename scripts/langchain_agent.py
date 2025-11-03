@@ -655,6 +655,13 @@ COMMON_STATS = ["goals", "assists", "playing_time_starts", "minutes", "shots"]
 
 def classify_intent(text: str) -> str:
     t = (text or "").lower()
+
+    # Check for meta questions about the assistant FIRST (before generic "who" pattern)
+    if re.search(r"^(hi|hello|hey|greetings|good morning|good afternoon|good evening)[\s!.]*$", t):
+        return "greeting"
+    if re.search(r"\b(who are you|what are you|what can you do|what do you do|your capabilities|help me|how do you work|what is this)", t):
+        return "meta_capabilities"
+
     # Check for ranking queries first (top N, best, highest, most, etc.)
     if re.search(r"\btop\s+\d+\b|\bbest\s+\d+\b|\bhighest\b|\branking\b|\bleading\b|\bmost\b.*scorer", t):
         return "ranking"
@@ -1064,6 +1071,7 @@ def present_disambiguation_options(options: List[Dict[str, Any]], original_text:
             # For typo corrections, still ask for confirmation
             name = options[0].get("player") or options[0].get("title") or str(options[0].get("candidate") or "")
             print(f"Did you mean '{name}'? (yes/no or type the correct name)")
+            sys.stdout.flush()
             CONTEXT['pending_disambig'] = {
                 "options": options,
                 "original_text": original_text,
@@ -1083,11 +1091,14 @@ def present_disambiguation_options(options: List[Dict[str, Any]], original_text:
 
     if is_typo_suggestion:
         print("Did you mean one of these? Reply with the option number or type the correct name.")
+        sys.stdout.flush()
         for i, opt in enumerate(options, start=1):
             name = opt.get("player") or opt.get("title") or str(opt.get("candidate") or "")
             print(f"{i}. {name}")
+            sys.stdout.flush()
     else:
         print("I found multiple possible players that match. Which one do you mean? Reply with the option number or type the full name.")
+        sys.stdout.flush()
         for i, opt in enumerate(options, start=1):
             name = opt.get("player") or opt.get("title") or str(opt.get("candidate") or "")
             score = opt.get("score")
@@ -1101,6 +1112,7 @@ def present_disambiguation_options(options: List[Dict[str, Any]], original_text:
             if snippet:
                 line += f" — {snippet[:120]}"
             print(line)
+            sys.stdout.flush()
     CONTEXT['pending_disambig'] = {
         "options": options,
         "original_text": original_text,
@@ -2216,6 +2228,11 @@ def interactive_slot_manager(user_text: str, intent_struct: Dict[str,Any]) -> Di
             first_ambig = needs_disambiguation[0]
             remaining_disambig = needs_disambiguation[1:]  # Store the rest for later
 
+            # IMPORTANT: Store resolved players BEFORE presenting disambiguation
+            # so they're available when the user responds
+            intent_struct["resolved_players"] = resolved_players
+            intent_struct["remaining_disambiguations"] = remaining_disambig
+
             # Try to auto-select if there's only 1 option
             auto_selected = present_disambiguation_options(first_ambig["options"], user_text, intent_struct)
 
@@ -2483,6 +2500,15 @@ def handle_input(text: str):
     if text.lower() in ("exit", "quit"):
         print("Goodbye.")
         sys.exit(0)
+
+    # Handle greetings and meta questions FIRST (before disambiguation)
+    early_intent = classify_intent(text)
+    if early_intent == "greeting":
+        print("Hey there! How can I assist you with football today?")
+        return
+    elif early_intent == "meta_capabilities":
+        print("I'm your football analytics assistant. I can help you with player statistics, comparisons, rankings, and visualizations. What would you like to know?")
+        return
 
     # Flag to track if we resolved disambiguation (skip re-parsing if true)
     resolved_disambiguation = False
@@ -3171,6 +3197,31 @@ Answer their question directly and comprehensively (3-5 sentences), considering 
                 # Print the answer directly - no DATA_MISSING checking for biographical queries
                 print("\n", ans)
                 print()
+
+                # AUTO-GENERATE VISUALIZATION: When asking about a player, show their key stats
+                if players and len(players) == 1:
+                    dbg("Auto-generating comprehensive visualization for player query")
+                    print("\n📊 Generating player statistics chart...\n")
+                    sys.stdout.flush()
+
+                    # Show goals over time (most requested metric)
+                    player = players[0]
+
+                    try:
+                        # Use the real plotting function that actually generates charts
+                        available_cols = get_available_columns()
+                        default_metric = normalize_metric_token("goals", available_cols) or "goals"
+
+                        path = validate_and_plot_players_timeseries([player], default_metric, seasons_for_query, text)
+
+                        if path:
+                            print(f"📈 Performance chart saved: {path}\n")
+                            sys.stdout.flush()
+                        else:
+                            dbg("Failed to generate player profile chart")
+                    except Exception as e:
+                        dbg("Error generating player visualization: %s", e)
+
                 return
 
         # If it's explicitly a plot/aggregate request, ask for metrics with context-aware defaults
@@ -3493,6 +3544,25 @@ Answer their question directly and comprehensively (3-5 sentences), considering 
     print("\nLLM answer:\n")
     print(ans)
     print()
+
+def handle_input_safe(text: str):
+    """
+    Safe wrapper around handle_input with comprehensive error handling.
+    Prevents unhandled exceptions from crashing the API server.
+    """
+    try:
+        handle_input(text)
+    except KeyboardInterrupt:
+        raise  # Allow keyboard interrupt to propagate
+    except SystemExit:
+        raise  # Allow system exit to propagate
+    except Exception as e:
+        # Catch all other exceptions to prevent crashes
+        dbg("CRITICAL ERROR in handle_input: %s", str(e))
+        print(f"Sorry, I encountered an error: {str(e)[:150]}")
+        print("Please try rephrasing your question.")
+        import traceback
+        traceback.print_exc()
 
 # ---------------- REPL ----------------
 if __name__ == "__main__":
