@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
-import { Send, Loader2, ZoomIn, ZoomOut, Maximize2, X, Minimize2 } from 'lucide-react'
+import { useState, useEffect, useRef, useCallback } from 'react'
+import { Send, Loader2, ZoomIn, ZoomOut, Maximize2, X, Minimize2, Download } from 'lucide-react'
 
 type Message = {
   id: string
@@ -22,6 +22,9 @@ export default function Home() {
   const [isFullscreen, setIsFullscreen] = useState(false)
   const wsRef = useRef<WebSocket | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const currentMessageIdRef = useRef<string | null>(null)
+  const accumulatedTextRef = useRef<string>('')
+  const lastQueryRef = useRef<string>('')
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -32,111 +35,160 @@ export default function Home() {
   }, [messages])
 
   useEffect(() => {
-    const wsUrl = process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:8000/ws/chat'
+    // Guard: if socket already exists and is open/connecting, skip creation
+    if (wsRef.current &&
+        (wsRef.current.readyState === WebSocket.OPEN ||
+         wsRef.current.readyState === WebSocket.CONNECTING)) {
+      console.debug('⚠️ WebSocket already exists — skipping duplicate creation')
+      return
+    }
+
+    console.count('ws-effect-run')
+
+    // Dynamic protocol selection for production
+    const proto = typeof window !== 'undefined' && window.location.protocol === 'https:' ? 'wss' : 'ws'
+    const wsUrl = process.env.NEXT_PUBLIC_WS_URL || `${proto}://localhost:8000/ws/chat`
+
+    console.log('Creating WebSocket connection to:', wsUrl)
     const ws = new WebSocket(wsUrl)
-    let currentMessageId: string | null = null
-    let accumulatedText = ''
+
+    // Set ref immediately to prevent race conditions
+    wsRef.current = ws
 
     ws.onopen = () => {
-      console.log('Connected to server')
+      console.log('✅ WebSocket connected')
       setIsConnected(true)
     }
 
     ws.onmessage = (event) => {
-      const data = JSON.parse(event.data)
+      try {
+        const data = JSON.parse(event.data)
 
-      if (data.type === 'text') {
-        // Accumulate text lines into a single message
-        if (!currentMessageId) {
-          // Start a new message
-          const newMessageId = Date.now().toString()
-          currentMessageId = newMessageId
-          accumulatedText = data.content
+        if (data.type === 'text') {
+          // Accumulate text lines into a single message
+          if (!currentMessageIdRef.current) {
+            // Start a new message
+            const newMessageId = Date.now().toString()
+            currentMessageIdRef.current = newMessageId
+            accumulatedTextRef.current = data.content
+            setMessages(prev => [
+              ...prev,
+              {
+                id: newMessageId,
+                type: 'assistant',
+                content: data.content,
+                timestamp: new Date()
+              }
+            ])
+          } else {
+            // Append to existing message
+            accumulatedTextRef.current += '\n' + data.content
+            const msgId = currentMessageIdRef.current
+            const accumulated = accumulatedTextRef.current
+            setMessages(prev => prev.map(msg =>
+              msg.id === msgId
+                ? { ...msg, content: accumulated }
+                : msg
+            ))
+          }
+        } else if (data.type === 'image') {
+          setImageLoading(false)
+          setCurrentImage(data.data)
           setMessages(prev => [
             ...prev,
             {
-              id: newMessageId,
-              type: 'assistant',
-              content: data.content,
+              id: Date.now().toString(),
+              type: 'image',
+              content: data.filename,
+              imageData: data.data,
               timestamp: new Date()
             }
           ])
-        } else {
-          // Append to existing message
-          accumulatedText += '\n' + data.content
-          const msgId = currentMessageId  // Capture for closure
-          setMessages(prev => prev.map(msg =>
-            msg.id === msgId
-              ? { ...msg, content: accumulatedText }
-              : msg
-          ))
-        }
-      } else if (data.type === 'image') {
-        setImageLoading(false)
-        setCurrentImage(data.data)
-        setMessages(prev => [
-          ...prev,
-          {
-            id: Date.now().toString(),
-            type: 'image',
-            content: data.filename,
-            imageData: data.data,
-            timestamp: new Date()
+        } else if (data.type === 'complete') {
+          // Finalize the current message
+          currentMessageIdRef.current = null
+          accumulatedTextRef.current = ''
+          setIsLoading(false)
+          setImageLoading(false)
+        } else if (data.type === 'ack') {
+          // Start fresh for new query
+          currentMessageIdRef.current = null
+          accumulatedTextRef.current = ''
+          // Check if this looks like a comparison query using ref
+          if (lastQueryRef.current.toLowerCase().includes('compar')) {
+            setImageLoading(true)
           }
-        ])
-      } else if (data.type === 'complete') {
-        // Finalize the current message
-        currentMessageId = null
-        accumulatedText = ''
-        setIsLoading(false)
-        setImageLoading(false)
-      } else if (data.type === 'ack') {
-        // Start fresh for new query
-        currentMessageId = null
-        accumulatedText = ''
-        // Check if this looks like a comparison query
-        if (input.toLowerCase().includes('compar')) {
-          setImageLoading(true)
         }
+      } catch (error) {
+        console.error('Error parsing WebSocket message:', error)
       }
     }
 
     ws.onerror = (error) => {
-      console.error('WebSocket error:', error)
+      console.error('❌ WebSocket error:', error)
       setIsConnected(false)
     }
 
-    ws.onclose = () => {
-      console.log('Disconnected from server')
+    ws.onclose = (event) => {
+      console.log('🔌 WebSocket closed:', event.code, event.reason)
       setIsConnected(false)
+      // Clear ref only if this is the current socket
+      if (wsRef.current === ws) {
+        wsRef.current = null
+      }
     }
-
-    wsRef.current = ws
 
     return () => {
-      ws.close()
+      console.log('Cleaning up WebSocket connection')
+      try {
+        ws.onopen = null
+        ws.onmessage = null
+        ws.onerror = null
+        ws.onclose = null
+        // Only close if this is still the active socket
+        if (wsRef.current === ws) {
+          ws.close()
+          wsRef.current = null
+        }
+      } catch (e) {
+        console.warn('Error during WebSocket cleanup:', e)
+      }
     }
-  }, [])
+  }, []) // Empty dependency array - run once on mount
 
-  const sendMessage = () => {
-    if (!input.trim() || !wsRef.current || !isConnected) return
+  const sendMessage = useCallback(() => {
+    const ws = wsRef.current
+    const query = input.trim()
 
-    // Add user message
+    if (!query || !ws || ws.readyState !== WebSocket.OPEN) {
+      console.warn('Cannot send message:', {
+        hasQuery: !!query,
+        hasWs: !!ws,
+        readyState: ws?.readyState
+      })
+      return
+    }
+
+    // Store query in ref for comparison check
+    lastQueryRef.current = query
+
+    // Add user message (optimistic UI update)
     setMessages(prev => [
       ...prev,
       {
         id: Date.now().toString(),
         type: 'user',
-        content: input,
+        content: query,
         timestamp: new Date()
       }
     ])
 
     // Send to server
-    wsRef.current.send(JSON.stringify({ query: input }))
+    console.log('Sending message:', query)
+    ws.send(JSON.stringify({ query }))
     setInput('')
     setIsLoading(true)
-  }
+  }, [input])
 
   const handleZoomIn = () => {
     setImageZoom(prev => Math.min(prev + 20, 200))
@@ -148,6 +200,17 @@ export default function Home() {
 
   const toggleFullscreen = () => {
     setIsFullscreen(!isFullscreen)
+  }
+
+  const downloadImage = () => {
+    if (!currentImage) return
+
+    const link = document.createElement('a')
+    link.href = `data:image/png;base64,${currentImage}`
+    link.download = `football-analytics-${Date.now()}.png`
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
   }
 
   return (
@@ -163,10 +226,10 @@ export default function Home() {
 
       {/* Animated football icons */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-20 left-10 text-6xl opacity-5 animate-pulse">⚽</div>
+        {/* <div className="absolute top-20 left-10 text-6xl opacity-5 animate-pulse">⚽</div>
         <div className="absolute top-40 right-20 text-5xl opacity-5 animate-pulse" style={{animationDelay: '1s'}}>🏆</div>
         <div className="absolute bottom-32 left-1/4 text-4xl opacity-5 animate-pulse" style={{animationDelay: '2s'}}>⚽</div>
-        <div className="absolute bottom-20 right-1/3 text-5xl opacity-5 animate-pulse" style={{animationDelay: '0.5s'}}>🥅</div>
+        <div className="absolute bottom-20 right-1/3 text-5xl opacity-5 animate-pulse" style={{animationDelay: '0.5s'}}>🥅</div> */}
       </div>
 
       {/* Header */}
@@ -235,25 +298,27 @@ export default function Home() {
                       <p className="whitespace-pre-wrap">{msg.content}</p>
                     ) : (
                       <div className="prose prose-invert max-w-none">
-                        {msg.content.includes('###') ? (
-                          // Format markdown-style analysis
-                          <div className="space-y-3 max-h-96 overflow-y-auto pr-2">
-                            {msg.content.split('###').map((section, idx) => {
-                              if (idx === 0) return null // Skip empty first section
-                              const [title, ...contentLines] = section.trim().split('\n')
+                        <div className="space-y-2 max-h-96 overflow-y-auto pr-2 scrollbar-thin">
+                          {msg.content.split('\n').map((line, i) => {
+                            // Check if line is all caps (headings like OVERVIEW, GOAL SCORING VS PLAYMAKING)
+                            const isHeading = /^[A-Z\s&]+$/.test(line.trim()) && line.trim().length > 2
+
+                            if (line.startsWith('###')) {
                               return (
-                                <div key={idx} className="border-l-2 border-blue-400 pl-4">
-                                  <h3 className="font-bold text-blue-300 mb-1">{title}</h3>
-                                  <p className="text-sm text-white/90 leading-relaxed">
-                                    {contentLines.join('\n').trim()}
-                                  </p>
-                                </div>
+                                <h3 key={i} className="text-emerald-400 font-bold text-lg mt-4 first:mt-0">
+                                  {line.replace('###', '').trim()}
+                                </h3>
                               )
-                            })}
-                          </div>
-                        ) : (
-                          <p className="whitespace-pre-wrap">{msg.content}</p>
-                        )}
+                            } else if (isHeading) {
+                              return (
+                                <h3 key={i} className="text-emerald-400 font-bold text-lg mt-4 mb-2 first:mt-0">
+                                  {line.trim()}
+                                </h3>
+                              )
+                            }
+                            return line ? <p key={i} className="text-gray-100 leading-relaxed">{line}</p> : <br key={i} />
+                          })}
+                        </div>
                       </div>
                     )}
                   </div>
@@ -351,6 +416,13 @@ export default function Home() {
                   >
                     {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
                     {isFullscreen ? 'Exit' : 'Fullscreen'}
+                  </button>
+                  <button
+                    onClick={downloadImage}
+                    className="bg-gradient-to-r from-green-700/60 to-emerald-700/60 hover:from-green-600/70 hover:to-emerald-600/70 text-white px-4 py-2 rounded-lg transition-colors flex items-center gap-2 border border-green-400/40 font-semibold"
+                  >
+                    <Download className="w-4 h-4" />
+                    Download
                   </button>
                   <span className="bg-gradient-to-r from-green-900/60 to-emerald-900/60 text-green-300 font-bold px-4 py-2 rounded-lg ml-auto border border-green-500/30">
                     {imageZoom}%

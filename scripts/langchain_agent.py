@@ -961,13 +961,19 @@ def resolve_pronouns_in_player_list(players: List[str], query_text: str = "") ->
 
     # Check if this looks like a new question (not a follow-up)
     # If user is asking about a new topic, don't resolve pronouns
+    # BUT: Always resolve pronouns for comparison questions
+    query_lower = query_text.lower()
+
+    comparison_indicators = ['vs', 'versus', 'or', 'better', 'worse', 'compare']
+    is_comparison = any(indicator in query_lower for indicator in comparison_indicators)
+
     new_question_indicators = [
         r"\b(who is|whos|who's)\b",
         r"^(tell me about|describe|explain)",
         r"^(search|find|lookup)",
     ]
 
-    is_new_question = any(re.search(pattern, query_text.lower()) for pattern in new_question_indicators)
+    is_new_question = (not is_comparison) and any(re.search(pattern, query_lower) for pattern in new_question_indicators)
 
     for player in players:
         player_lower = player.strip().lower()
@@ -1259,20 +1265,35 @@ SLOT_PROMPT = """
 Extract the structured intent from the user query. Return only valid JSON (no explanation).
 Fields:
 - intent: one of ["plot","compare","aggregate","list","search","natural"]
-- players: list of ALL player names mentioned (including pronouns like "him", "her", "them")
+- players: list of ALL player names mentioned (including pronouns like "him", "her", "them"). DO NOT include positional phrases like "front three", "back four" as player names.
 - team: team/club name or null
-- position: player position or null (e.g. "striker", "forward", "midfielder", "defender")
+- position: player position or null (e.g. "FW", "MF", "DF", "GK" for specific positions)
 - metrics: list of metric tokens or null if user didn't specify
-- seasons_back: integer or null
+- seasons_back: integer or null (e.g., "current" means 1)
 - viz: one of ["time_series","radar","both","auto"]
+- limit: number of players to return or null (e.g., "front three" means limit=3, "back four" means limit=4)
+- sort_by: how to rank players or null (e.g., "starts", "minutes", "goals")
 
-IMPORTANT: For comparison queries like "compare X with Y" or "X vs Y", extract BOTH players.
-For pronouns like "him", "her", "them", include them in the players list as-is.
+IMPORTANT:
+1. For comparison queries like "compare X with Y" or "X vs Y", extract BOTH players.
+2. For pronouns like "him", "her", "them", include them in the players list as-is.
+3. For positional group queries like "front three", "back four", "starting forwards", DO NOT extract them as player names. Instead:
+   - Set position to the position code based on these mappings:
+     * "front" / "forwards" / "strikers" / "attackers" → "FW"
+     * "midfield" / "midfielders" → "MF"
+     * "back" / "defense" / "defenders" → "DF"
+     * "goalkeeper" / "keeper" → "GK"
+   - Set limit to the number if specified ("three"=3, "four"=4, etc.)
+   - Set sort_by to "starts" for starting lineups (or "goals" for top scorers, etc.)
+   - Leave players list empty
 
 Examples:
-- "compare Messi with Ronaldo" -> players: ["Messi", "Ronaldo"]
-- "compare him with Salah" -> players: ["him", "Salah"]
-- "Haaland vs Mbappe" -> players: ["Haaland", "Mbappe"]
+- "compare Messi with Ronaldo" -> players: ["Messi", "Ronaldo"], intent: "compare"
+- "compare him with Salah" -> players: ["him", "Salah"], intent: "compare"
+- "Haaland vs Mbappe" -> players: ["Haaland", "Mbappe"], intent: "compare"
+- "who are the current front three of Barcelona?" -> players: [], team: "Barcelona", position: "FW", limit: 3, sort_by: "starts", seasons_back: 1, intent: "list"
+- "Barcelona's back four" -> players: [], team: "Barcelona", position: "DF", limit: 4, sort_by: "starts", intent: "list"
+- "top 5 goal scorers in Premier League" -> players: [], position: null, limit: 5, sort_by: "goals", intent: "list"
 
 User query: {query}
 
@@ -1296,6 +1317,8 @@ def parse_intent_with_llm(query: str) -> Dict[str, Any]:
         parsed.setdefault("metrics", parsed.get("metrics"))
         parsed.setdefault("seasons_back", parsed.get("seasons_back"))
         parsed.setdefault("viz", parsed.get("viz", "auto"))
+        parsed.setdefault("limit", parsed.get("limit"))
+        parsed.setdefault("sort_by", parsed.get("sort_by"))
         dbg("parse_intent_with_llm parsed=%s", json.dumps(parsed)[:500])
     except Exception as e:
         dbg("parse_intent_with_llm JSON parse failed: %s; raw=%s", e, raw)
@@ -1303,7 +1326,7 @@ def parse_intent_with_llm(query: str) -> Dict[str, Any]:
         if "|" in query:
             parts = [p.strip() for p in query.split("|")]
             players = [parts[0]]
-        parsed = {"intent": classify_intent(query), "players": players, "team": None, "position": None, "metrics": None, "seasons_back": None, "viz": "auto"}
+        parsed = {"intent": classify_intent(query), "players": players, "team": None, "position": None, "metrics": None, "seasons_back": None, "viz": "auto", "limit": None, "sort_by": None}
         dbg("parse_intent_with_llm fallback=%s", parsed)
 
     # If no players found by LLM, try heuristics
@@ -1562,47 +1585,153 @@ def plot_group_timeseries(players: List[str], all_seasons: List[int], all_values
         return None
     return safe_save_plot(fig, fname)
 
-def plot_group_radar(players: List[str], metric_labels: List[str], players_percentiles: Dict[str, List[float]], fname: str, actual_values: Optional[Dict[str, Dict[str, float]]] = None):
+def plot_group_radar(players: List[str], metric_labels: List[str], players_percentiles: Dict[str, List[float]], fname: str, actual_values: Optional[Dict[str, Dict[str, float]]] = None, players_seasons: Optional[Dict[str, Optional[str]]] = None):
+    # Apply dark theme to match comparison charts
+    plt.style.use('dark_background')
+
     N = len(metric_labels)
     angles = np.linspace(0, 2 * np.pi, N, endpoint=False).tolist()
     angles += angles[:1]
-    fig = plt.figure(figsize=(10,10))
-    ax = fig.add_subplot(111, polar=True)
 
-    colors = ['#FF6B6B', '#4ECDC4', '#95E1D3', '#F38181']
+    # Create figure with transparent background to blend with page
+    fig = plt.figure(figsize=(10,10), facecolor='none')
+    ax = fig.add_subplot(111, polar=True)
+    ax.set_facecolor('none')
+
+    colors = ['#FF6B6B', '#4ECDC4', '#FFD93D', '#A78BFA']
+
+    # For single player, use normalized actual values instead of percentiles
+    is_single_player = len(players) == 1
 
     for idx, p in enumerate(players):
-        vals = players_percentiles.get(p, [])
-        if not vals or len(vals) != N:
-            continue
-        data = vals + vals[:1]
         color = colors[idx % len(colors)]
-        ax.plot(angles, data, label=p.title(), marker='o', linewidth=2.5, markersize=8, color=color)
-        ax.fill(angles, data, alpha=0.15, color=color)
 
-        # Add actual value labels if provided
-        if actual_values and p in actual_values:
+        # Add season label to player name if available
+        label_text = p.title()
+        if players_seasons and p in players_seasons and players_seasons[p]:
+            try:
+                year = int(players_seasons[p])
+                season_label = f"{str(year)[-2:]}-{str(year+1)[-2:]}"
+                label_text = f"{p.title()} ({season_label})"
+            except (ValueError, TypeError):
+                label_text = f"{p.title()} ({players_seasons[p]})"
+
+        if is_single_player and actual_values and p in actual_values:
+            # For single player: normalize actual values to 0-100 scale for visualization
+            actual_vals = [actual_values[p].get(m, 0) for m in metric_labels]
+
+            # Normalize each metric independently to 0-100 scale
+            # Find max for each metric to normalize
+            max_vals = []
             for i, metric in enumerate(metric_labels):
-                if metric in actual_values[p]:
-                    actual_val = actual_values[p][metric]
-                    percentile = vals[i] if i < len(vals) else 0
-                    # Add text label showing actual value
-                    angle_rad = angles[i]
-                    ax.text(angle_rad, percentile + 5, f'{actual_val:.1f}',
-                           ha='center', va='bottom', fontsize=8, color=color,
-                           bbox=dict(boxstyle='round,pad=0.3', facecolor='white', alpha=0.7, edgecolor=color))
+                val = actual_vals[i]
+                # Use reasonable max values for common metrics
+                if 'goals' in metric.lower() or 'assists' in metric.lower():
+                    max_val = max(30, val * 1.5)  # Scale based on player's value
+                elif 'xg' in metric.lower() or 'xa' in metric.lower():
+                    max_val = max(20, val * 1.5)
+                elif 'progressive' in metric.lower():
+                    max_val = max(100, val * 1.5)
+                else:
+                    max_val = max(50, val * 1.5)
+                max_vals.append(max_val)
 
-    ax.set_thetagrids(np.degrees(angles[:-1]), [m.replace('_', ' ').title() for m in metric_labels], fontsize=10, weight='bold')
-    ax.set_title("📊 Performance Radar (Percentiles vs League)", fontsize=14, weight='bold', pad=20)
+            # Normalize to 0-100
+            normalized_vals = [(actual_vals[i] / max_vals[i] * 100) if max_vals[i] > 0 else 0 for i in range(len(actual_vals))]
+            data = normalized_vals + normalized_vals[:1]
+
+            ax.plot(angles, data, label=label_text, marker='o', linewidth=3, markersize=10, color=color)
+            ax.fill(angles, data, alpha=0.25, color=color)
+
+            # Show actual values as labels
+            for i, metric in enumerate(metric_labels):
+                actual_val = actual_vals[i]
+                if actual_val == 0:
+                    continue
+
+                angle_rad = angles[i]
+                radial_pos = normalized_vals[i]
+
+                ax.text(angle_rad, radial_pos + 10, f'{actual_val:.0f}',
+                       ha='center', va='center', fontsize=11, weight='bold', color='white',
+                       bbox=dict(boxstyle='round,pad=0.4', facecolor=color,
+                               alpha=0.95, edgecolor='white', linewidth=2))
+        else:
+            # For multiple players: use percentiles
+            vals = players_percentiles.get(p, [])
+            if not vals or len(vals) != N:
+                continue
+            data = vals + vals[:1]
+
+            ax.plot(angles, data, label=label_text, marker='o', linewidth=2.5, markersize=8, color=color)
+            ax.fill(angles, data, alpha=0.15, color=color)
+
+            # Add actual value labels if provided - skip zero values to reduce clutter
+            if actual_values and p in actual_values:
+                for i, metric in enumerate(metric_labels):
+                    if metric in actual_values[p]:
+                        actual_val = actual_values[p][metric]
+                        # Skip labels for zero values to reduce clutter
+                        if actual_val == 0:
+                            continue
+
+                        percentile = vals[i] if i < len(vals) else 0
+                        angle_rad = angles[i]
+
+                        # Offset labels for different players to reduce overlap
+                        radial_offset = 8 + (idx * 8)
+
+                        ax.text(angle_rad, percentile + radial_offset, f'{actual_val:.0f}',
+                               ha='center', va='center', fontsize=9, weight='bold', color='white',
+                               bbox=dict(boxstyle='round,pad=0.35', facecolor=color,
+                                       alpha=0.9, edgecolor='white', linewidth=1.5))
+
+    ax.set_thetagrids(np.degrees(angles[:-1]), [m.replace('_', ' ').title() for m in metric_labels],
+                     fontsize=11, weight='bold', color='white')
+
+    # Different title for single player vs comparison
+    if is_single_player:
+        # Get the season for the single player
+        player_name = players[0]
+        season_text = "Latest Season"
+        if players_seasons and player_name in players_seasons and players_seasons[player_name]:
+            season_value = players_seasons[player_name]
+            # If it's already in "XX-YY" format, use it directly
+            if isinstance(season_value, str) and '-' in season_value:
+                season_text = f"{season_value}"
+            else:
+                # Otherwise try to parse as year
+                try:
+                    year = int(season_value)
+                    season_label = f"{str(year)[-2:]}-{str(year+1)[-2:]}"
+                    season_text = f"{season_label}"
+                except (ValueError, TypeError):
+                    season_text = str(season_value)
+
+        ax.set_title(f"Performance Radar - {season_text}\n(Actual Stats)",
+                    fontsize=14, weight='bold', pad=20, color='white')
+    else:
+        ax.set_title("Performance Radar\n(Percentiles vs League - Latest Relevant Season)",
+                    fontsize=14, weight='bold', pad=20, color='white')
+
     ax.set_ylim(0, 100)
-    ax.grid(True, alpha=0.3)
-    ax.legend(loc='upper right', bbox_to_anchor=(1.3, 1.1), fontsize=11, framealpha=0.9)
+    ax.grid(True, alpha=0.3, color='gray')
+    ax.legend(loc='upper right', bbox_to_anchor=(1.3, 1.1), fontsize=12, framealpha=0.9)
 
-    # Add percentile markers
-    ax.set_yticks([25, 50, 75, 100])
-    ax.set_yticklabels(['25%', '50%', '75%', '100%'], fontsize=9)
+    # Different y-axis labels for single player vs comparison
+    if is_single_player:
+        # For single player, hide the percentile ticks since we're showing actual values
+        ax.set_yticks([])
+    else:
+        # For comparisons, show percentile markers
+        ax.set_yticks([25, 50, 75, 100])
+        ax.set_yticklabels(['25%', '50%', '75%', '100%'], fontsize=10, color='white')
 
-    return safe_save_plot(fig, fname)
+    ax.tick_params(colors='white')
+
+    result = safe_save_plot(fig, fname)
+    plt.style.use('default')  # Reset to default style
+    return result
 
 # ---------------- Football API Integration for Images ----------------
 FOOTBALL_API_KEY = os.getenv("FOOTBALL_API_KEY", "")
@@ -1853,6 +1982,7 @@ def plot_comprehensive_comparison(
     metrics_for_radar: List[str],
     radar_percentiles: Dict[str, List[float]],
     radar_actual_values: Dict[str, Dict[str, float]],
+    radar_seasons: Dict[str, Optional[str]],
     bar_chart_data: Dict[str, Dict[str, float]],
     fname: str
 ) -> Optional[str]:
@@ -1861,66 +1991,74 @@ def plot_comprehensive_comparison(
     - Goals and Assists time series (top section)
     - Radar chart with actual values (bottom left)
     - Head-to-head bar chart (bottom right)
-    All in one large image.
+    All in one large image with dark theme.
     """
     try:
-        # Create large figure with grid layout
-        fig = plt.figure(figsize=(24, 16))
+        # Set dark theme
+        plt.style.use('dark_background')
+
+        # Create large figure with grid layout - transparent to blend with page
+        fig = plt.figure(figsize=(24, 16), facecolor='none')
         gs = fig.add_gridspec(3, 2, height_ratios=[1, 1, 1.2], hspace=0.3, wspace=0.3)
 
-        colors_map = {players[0]: '#FF6B6B', players[1]: '#4ECDC4'} if len(players) == 2 else {}
+        # Bright colors for dark theme
+        chart_colors = ['#FF6B6B', '#4ECDC4', '#FFD93D', '#A78BFA']
+        colors_map = {players[0]: chart_colors[0], players[1]: chart_colors[1]} if len(players) == 2 else {}
 
         # Row 1: Goals comparison
         ax_goals = fig.add_subplot(gs[0, :])
+        ax_goals.set_facecolor('none')
         for player in players:
             if player in goals_data:
-                color = colors_map.get(player, None)
-                ax_goals.plot(all_seasons, goals_data[player], marker='o', linewidth=2.5,
-                            markersize=10, label=player.title(), color=color)
+                color = colors_map.get(player, chart_colors[0])
+                ax_goals.plot(all_seasons, goals_data[player], marker='o', linewidth=3,
+                            markersize=12, label=player.title(), color=color)
                 # Add value labels
                 for i, (season, value) in enumerate(zip(all_seasons, goals_data[player])):
                     if value is not None:
                         ax_goals.annotate(f'{int(value)}', (season, value),
-                                        textcoords="offset points", xytext=(0,10),
-                                        ha='center', fontsize=10, weight='bold',
-                                        bbox=dict(boxstyle='round,pad=0.4', facecolor='white',
-                                                alpha=0.8, edgecolor=color))
+                                        textcoords="offset points", xytext=(0,12),
+                                        ha='center', fontsize=12, weight='bold', color='white',
+                                        bbox=dict(boxstyle='round,pad=0.5', facecolor=color,
+                                                alpha=0.9, edgecolor='white', linewidth=1.5))
 
-        ax_goals.set_xlabel('Season', fontweight='bold', fontsize=14)
-        ax_goals.set_ylabel('Goals', fontweight='bold', fontsize=14)
-        ax_goals.set_title('⚽ GOALS COMPARISON', fontweight='bold', fontsize=16, pad=15)
-        ax_goals.legend(fontsize=12, loc='best')
-        ax_goals.grid(True, alpha=0.3)
+        ax_goals.set_xlabel('Season', fontweight='bold', fontsize=16, color='white')
+        ax_goals.set_ylabel('Goals', fontweight='bold', fontsize=16, color='white')
+        ax_goals.set_title('⚽ GOALS COMPARISON', fontweight='bold', fontsize=18, pad=20, color='white')
+        ax_goals.legend(fontsize=14, loc='best', framealpha=0.9)
+        ax_goals.grid(True, alpha=0.2, color='gray')
+        ax_goals.tick_params(colors='white', labelsize=12)
 
         # Row 2: Assists comparison
         ax_assists = fig.add_subplot(gs[1, :])
+        ax_assists.set_facecolor('none')
         for player in players:
             if player in assists_data:
-                color = colors_map.get(player, None)
-                ax_assists.plot(all_seasons, assists_data[player], marker='o', linewidth=2.5,
-                              markersize=10, label=player.title(), color=color)
+                color = colors_map.get(player, chart_colors[1])
+                ax_assists.plot(all_seasons, assists_data[player], marker='o', linewidth=3,
+                              markersize=12, label=player.title(), color=color)
                 # Add value labels
                 for i, (season, value) in enumerate(zip(all_seasons, assists_data[player])):
                     if value is not None:
                         ax_assists.annotate(f'{int(value)}', (season, value),
-                                          textcoords="offset points", xytext=(0,10),
-                                          ha='center', fontsize=10, weight='bold',
-                                          bbox=dict(boxstyle='round,pad=0.4', facecolor='white',
-                                                  alpha=0.8, edgecolor=color))
+                                          textcoords="offset points", xytext=(0,12),
+                                          ha='center', fontsize=12, weight='bold', color='white',
+                                          bbox=dict(boxstyle='round,pad=0.5', facecolor=color,
+                                                  alpha=0.9, edgecolor='white', linewidth=1.5))
 
-        ax_assists.set_xlabel('Season', fontweight='bold', fontsize=14)
-        ax_assists.set_ylabel('Assists', fontweight='bold', fontsize=14)
-        ax_assists.set_title('🎯 ASSISTS COMPARISON', fontweight='bold', fontsize=16, pad=15)
-        ax_assists.legend(fontsize=12, loc='best')
-        ax_assists.grid(True, alpha=0.3)
+        ax_assists.set_xlabel('Season', fontweight='bold', fontsize=16, color='white')
+        ax_assists.set_ylabel('Assists', fontweight='bold', fontsize=16, color='white')
+        ax_assists.set_title('🎯 ASSISTS COMPARISON', fontweight='bold', fontsize=18, pad=20, color='white')
+        ax_assists.legend(fontsize=14, loc='best', framealpha=0.9)
+        ax_assists.grid(True, alpha=0.2, color='gray')
+        ax_assists.tick_params(colors='white', labelsize=12)
 
         # Row 3 Left: Radar chart with actual values
         ax_radar = fig.add_subplot(gs[2, 0], polar=True)
+        ax_radar.set_facecolor('none')
         N = len(metrics_for_radar)
         angles = np.linspace(0, 2 * np.pi, N, endpoint=False).tolist()
         angles += angles[:1]
-
-        chart_colors = ['#FF6B6B', '#4ECDC4', '#95E1D3', '#F38181']
 
         for idx, player in enumerate(players):
             vals = radar_percentiles.get(player, [])
@@ -1928,37 +2066,61 @@ def plot_comprehensive_comparison(
                 continue
             data = vals + vals[:1]
             color = chart_colors[idx % len(chart_colors)]
-            ax_radar.plot(angles, data, label=player.title(), marker='o',
-                         linewidth=2.5, markersize=8, color=color)
-            ax_radar.fill(angles, data, alpha=0.15, color=color)
 
-            # Add actual value labels with smart positioning to avoid overlap
+            # Add season label to player name
+            player_season = radar_seasons.get(player)
+            if player_season:
+                # Convert "2024" to "24-25" format for display
+                try:
+                    year = int(player_season)
+                    season_label = f"{str(year)[-2:]}-{str(year+1)[-2:]}"
+                    label_text = f"{player.title()} ({season_label})"
+                except (ValueError, TypeError):
+                    label_text = f"{player.title()} ({player_season})"
+            else:
+                label_text = player.title()
+
+            ax_radar.plot(angles, data, label=label_text, marker='o',
+                         linewidth=3.5, markersize=10, color=color)
+            ax_radar.fill(angles, data, alpha=0.25, color=color)
+
+            # Add actual value labels with better visibility
+            # Only show labels for non-zero values and use better spacing to reduce overlap
             if player in radar_actual_values:
                 for i, metric in enumerate(metrics_for_radar):
                     if metric in radar_actual_values[player]:
                         actual_val = radar_actual_values[player][metric]
+                        # Skip labels for zero values to reduce clutter
+                        if actual_val == 0:
+                            continue
+
                         percentile = vals[i] if i < len(vals) else 0
                         angle_rad = angles[i]
-                        # Offset labels for different players to reduce overlap
-                        radial_offset = 8 + (idx * 6)  # Increase offset for each player
+
+                        # Increased offset for different players to reduce overlap
+                        radial_offset = 15 + (idx * 15)
+
                         ax_radar.text(angle_rad, percentile + radial_offset, f'{actual_val:.0f}',
-                                    ha='center', va='center', fontsize=8, weight='bold', color=color,
-                                    bbox=dict(boxstyle='round,pad=0.25', facecolor='white',
-                                            alpha=0.85, edgecolor=color, linewidth=1.5))
+                                    ha='center', va='center', fontsize=10, weight='bold', color='white',
+                                    bbox=dict(boxstyle='round,pad=0.35', facecolor=color,
+                                            alpha=0.9, edgecolor='white', linewidth=1.5))
 
         ax_radar.set_thetagrids(np.degrees(angles[:-1]),
                                [m.replace('_', ' ').title() for m in metrics_for_radar],
-                               fontsize=11, weight='bold')
-        ax_radar.set_title("📊 Performance Radar\n(Percentiles + Actual Values)",
-                          fontsize=14, weight='bold', pad=20)
-        ax_radar.set_ylim(0, 100)
-        ax_radar.grid(True, alpha=0.3)
-        ax_radar.legend(loc='upper right', bbox_to_anchor=(1.2, 1.1), fontsize=11)
+                               fontsize=13, weight='bold', color='white')
+        ax_radar.set_title("📊 Performance Radar\n(Percentiles + Actual Values - Latest Relevant Season)",
+                          fontsize=15, weight='bold', pad=25, color='white')
+        # Increase ylim to accommodate label offsets
+        ax_radar.set_ylim(0, 140)
+        ax_radar.grid(True, alpha=0.3, color='gray')
+        ax_radar.legend(loc='upper right', bbox_to_anchor=(1.35, 1.15), fontsize=12, framealpha=0.9)
         ax_radar.set_yticks([25, 50, 75, 100])
-        ax_radar.set_yticklabels(['25%', '50%', '75%', '100%'], fontsize=9)
+        ax_radar.set_yticklabels(['25%', '50%', '75%', '100%'], fontsize=11, color='white')
+        ax_radar.tick_params(colors='white')
 
         # Row 3 Right: Bar chart
         ax_bar = fig.add_subplot(gs[2, 1])
+        ax_bar.set_facecolor('none')
         metrics_for_bar = list(bar_chart_data[players[0]].keys()) if players and bar_chart_data.get(players[0]) else []
         x = np.arange(len(metrics_for_bar))
         width = 0.35 if len(players) == 2 else 0.25
@@ -1967,7 +2129,7 @@ def plot_comprehensive_comparison(
             values = [bar_chart_data[player].get(m, 0) for m in metrics_for_bar]
             offset = (i - len(players)/2 + 0.5) * width
             color = chart_colors[i % len(chart_colors)]
-            bars = ax_bar.bar(x + offset, values, width, label=player.title(), color=color)
+            bars = ax_bar.bar(x + offset, values, width, label=player.title(), color=color, alpha=0.9)
 
             # Add value labels on bars
             for bar in bars:
@@ -1975,23 +2137,26 @@ def plot_comprehensive_comparison(
                 if height > 0:
                     ax_bar.text(bar.get_x() + bar.get_width()/2., height,
                               f'{height:.1f}',
-                              ha='center', va='bottom', fontsize=9, weight='bold')
+                              ha='center', va='bottom', fontsize=11, weight='bold', color='white')
 
-        ax_bar.set_xlabel('Metrics', fontweight='bold', fontsize=12)
-        ax_bar.set_ylabel('Value', fontweight='bold', fontsize=12)
-        ax_bar.set_title('📊 Head-to-Head Stats\n(Latest Season)', fontweight='bold', fontsize=14)
+        ax_bar.set_xlabel('Metrics', fontweight='bold', fontsize=14, color='white')
+        ax_bar.set_ylabel('Value', fontweight='bold', fontsize=14, color='white')
+        ax_bar.set_title('📊 Head-to-Head Stats\n(Latest Season)', fontweight='bold', fontsize=16, color='white')
         ax_bar.set_xticks(x)
         ax_bar.set_xticklabels([m.replace('_', ' ').title() for m in metrics_for_bar],
-                               rotation=20, ha='right', fontsize=10)
-        ax_bar.legend(fontsize=11)
-        ax_bar.grid(axis='y', alpha=0.3)
+                               rotation=20, ha='right', fontsize=12, color='white')
+        ax_bar.legend(fontsize=13, framealpha=0.9)
+        ax_bar.grid(axis='y', alpha=0.2, color='gray')
+        ax_bar.tick_params(colors='white', labelsize=12)
 
         # Add main title
         season_range = f"{min(all_seasons)} - {max(all_seasons)}" if all_seasons else "Multiple Seasons"
         fig.suptitle(f"{players[0].title()} vs {players[1].title()}\nSeasons: {season_range}",
-                    fontsize=20, weight='bold', y=0.98)
+                    fontsize=22, weight='bold', y=0.98, color='white')
 
-        return safe_save_plot(fig, fname)
+        result = safe_save_plot(fig, fname)
+        plt.style.use('default')  # Reset to default style
+        return result
 
     except Exception as e:
         dbg(f"Error creating comprehensive comparison: {e}")
@@ -2018,6 +2183,8 @@ USER QUESTION:
 {question}
 
 Provide a brief, conversational answer (2-4 sentences) about the player based on the information available. Focus on their position, team, nationality, and notable characteristics.
+
+IMPORTANT: Use plain text only. Do NOT use markdown formatting like ** for bold or __ for italics. Write in clear, natural language with proper punctuation and structure.
 """
         else:
             prompt = f"""
@@ -2032,6 +2199,8 @@ USER QUESTION:
 {question}
 
 Answer briefly and factually. If specific numeric data is not available in the snippets, provide a general knowledge answer based on what you know about football, clearly indicating when you're providing general information vs. specific data from the snippets.
+
+IMPORTANT: Use plain text only. Do NOT use markdown formatting like ** for bold or __ for italics. Write in clear, natural language with proper punctuation and structure.
 """
         ans = llm.predict(prompt, max_tokens=400, temperature=OPENAI_TEMPERATURE)
         return ans
@@ -2149,7 +2318,8 @@ def interactive_slot_manager(user_text: str, intent_struct: Dict[str,Any]) -> Di
         'interesting', 'cool', 'nice', 'thanks', 'thank you',
         'ok', 'okay', 'yes', 'no', 'sure', 'great', 'awesome'
     ]
-    is_conversational = any(phrase in text_lower for phrase in conversational_phrases)
+    # Use word boundaries to avoid false matches (e.g., 'no' in 'Cristiano')
+    is_conversational = any(re.search(r'\b' + re.escape(phrase) + r'\b', text_lower) for phrase in conversational_phrases)
 
     # Detect if this is a new question (not a player-specific follow-up)
     question_starters = ['who', 'what', 'when', 'where', 'why', 'how', 'which', 'whose',
@@ -2336,10 +2506,39 @@ def validate_and_plot_players_timeseries(players: List[str], metric: str, season
 def calculate_radar_data(players: List[str], metrics: List[str], seasons_back: int = 1):
     """
     Helper function to calculate radar chart data (percentiles and actual values).
-    Returns: (players_percentiles, players_actual_values)
+    For each player, finds their last RELEVANT season (with non-zero stats).
+    Returns: (players_percentiles, players_actual_values, players_seasons)
     """
     latest_vals = {p: [] for p in players}
     players_percentiles = {p: [] for p in players}
+    players_seasons = {p: None for p in players}  # Track which season each player's data is from
+
+    # First, determine the last relevant season for each player
+    for p in players:
+        # Look back through seasons to find last one with meaningful stats
+        for lookback in range(1, 6):  # Check up to 5 seasons back
+            resp = aggregate_mcp(p, stat="goals", seasons_back=lookback)
+            if isinstance(resp, dict) and resp.get("found"):
+                per = resp.get("per_season") or []
+                if per:
+                    # Find the most recent season with any non-zero stat
+                    for season_data in reversed(per):
+                        val = season_data.get("value")
+                        if val is not None and val > 0:
+                            players_seasons[p] = season_data.get("season")
+                            dbg("Player %s: using season %s (last active season)", p, players_seasons[p])
+                            break
+                    if players_seasons[p]:
+                        break
+
+        # If still no season found, default to latest
+        if not players_seasons[p]:
+            resp = aggregate_mcp(p, stat="goals", seasons_back=1)
+            if isinstance(resp, dict) and resp.get("found"):
+                per = resp.get("per_season") or []
+                if per:
+                    players_seasons[p] = per[-1].get("season")
+                    dbg("Player %s: using latest season %s (default)", p, players_seasons[p])
 
     for metric in metrics:
         cohort = None
@@ -2368,12 +2567,22 @@ def calculate_radar_data(players: List[str], metrics: List[str], seasons_back: i
                                 pass
 
         for p in players:
-            resp = aggregate_mcp(p, stat=metric, seasons_back=1)
+            # Get data from the player's relevant season
+            resp = aggregate_mcp(p, stat=metric, seasons_back=5)  # Get multiple seasons
             val = None
             if isinstance(resp, dict) and resp.get("found"):
                 per = resp.get("per_season") or []
-                if per:
+                # Find the value for the player's relevant season
+                target_season = players_seasons.get(p)
+                if target_season:
+                    for season_data in per:
+                        if season_data.get("season") == target_season:
+                            val = season_data.get("value")
+                            break
+                # Fallback to latest if season not found
+                if val is None and per:
                     val = per[-1].get("value")
+
             if val is None:
                 latest_vals[p].append(None)
             else:
@@ -2414,7 +2623,7 @@ def calculate_radar_data(players: List[str], metrics: List[str], seasons_back: i
                 actual_dict[metric] = latest_vals[p][i]
         players_actual_values[p] = actual_dict
 
-    return players_percentiles, players_actual_values
+    return players_percentiles, players_actual_values, players_seasons
 
 def validate_and_plot_radar(players: List[str], metrics: List[str], seasons_back: int, text: str) -> Optional[str]:
     dbg("validate_and_plot_radar players=%s metrics=%s seasons_back=%d", players, metrics, seasons_back)
@@ -2423,7 +2632,7 @@ def validate_and_plot_radar(players: List[str], metrics: List[str], seasons_back
         dbg("Radar needs >=3 metrics; got %d", len(metrics))
         return None
 
-    players_percentiles, players_actual_values = calculate_radar_data(players, metrics, seasons_back)
+    players_percentiles, players_actual_values, players_seasons = calculate_radar_data(players, metrics, seasons_back)
 
     # Validate percentiles
     for p in players:
@@ -2432,7 +2641,7 @@ def validate_and_plot_radar(players: List[str], metrics: List[str], seasons_back
 
     fname = f"group_radar_{int(time.time())}.png"
     try:
-        return plot_group_radar(players, metrics, players_percentiles, fname, actual_values=players_actual_values)
+        return plot_group_radar(players, metrics, players_percentiles, fname, actual_values=players_actual_values, players_seasons=players_seasons)
     except Exception as e:
         dbg("plot_group_radar exception: %s", e)
         return None
@@ -2812,9 +3021,6 @@ def handle_input(text: str):
             available_cols = get_available_columns()
             metrics_to_compare = [normalize_metric_token(m, available_cols) for m in key_metrics if normalize_metric_token(m, available_cols)]
 
-            print(f"\n🔄 Generating comprehensive comparison for {', '.join(players)}...")
-            print("📊 Creating visualizations...\n")
-
             charts_created = []
 
             # 1. For 2-player comparisons, create comprehensive combined chart
@@ -2833,7 +3039,7 @@ def handle_input(text: str):
                     if not bulk_result or not bulk_result.get("ok"):
                         dbg("Bulk aggregation failed, falling back to individual calls")
                         # Fallback to old method if bulk fails
-                        radar_percentiles, radar_actual_values = calculate_radar_data(players, metrics_to_compare[:6], seasons_back=1)
+                        radar_percentiles, radar_actual_values, radar_seasons = calculate_radar_data(players, metrics_to_compare[:6], seasons_back=1)
                         goals_data = {}
                         assists_data = {}
                         all_seasons = []
@@ -2927,6 +3133,7 @@ def handle_input(text: str):
                         # IMPORTANT: Use each player's latest season WITH DATA, not global latest
                         radar_percentiles = {}
                         radar_actual_values = {}
+                        radar_seasons = {}
 
                         for player_name, data in player_data.items():
                             if data.get("found"):
@@ -2934,21 +3141,26 @@ def handle_input(text: str):
 
                                 # Find player's latest season with actual data (non-zero values)
                                 latest_stats = {}
+                                player_season = None
                                 for season in reversed(all_seasons):  # Start from most recent
                                     season_stats = per_season.get(str(season), {})
                                     # Check if this season has any non-zero stats
                                     has_data = any(v > 0 for v in season_stats.values() if isinstance(v, (int, float)))
                                     if has_data:
                                         latest_stats = season_stats
+                                        player_season = str(season)
                                         dbg("Player %s: using season %s for radar/bar (latest with data)", player_name, season)
                                         break
 
                                 # Fallback to global latest if no season found
                                 if not latest_stats:
                                     latest_stats = data.get("latest", {})
+                                    if all_seasons:
+                                        player_season = str(all_seasons[-1])
                                     dbg("Player %s: falling back to global latest", player_name)
 
                                 radar_actual_values[player_name] = latest_stats
+                                radar_seasons[player_name] = player_season
 
                                 # Calculate percentiles using cohort data
                                 percentiles = []
@@ -2997,16 +3209,16 @@ def handle_input(text: str):
                     # Create comprehensive comparison chart
                     if all_seasons and goals_data and assists_data:
                         comp_fname = f"comprehensive_comparison_{int(time.time())}.png"
-                        # Use canonical player names (from player_data keys) for plotting
-                        canonical_players = [p for p in player_data.keys() if player_data[p].get("found")]
+                        # Use canonical player names for plotting
+                        canonical_players = players
                         comp_path = plot_comprehensive_comparison(
                             canonical_players, all_seasons, goals_data, assists_data,
                             metrics_to_compare[:6], radar_percentiles, radar_actual_values,
-                            bar_chart_data, comp_fname
+                            radar_seasons, bar_chart_data, comp_fname
                         )
                         if comp_path:
                             charts_created.append(("comprehensive", comp_path))
-                            print(f"✅ Comprehensive Comparison: {comp_path}")
+                            # Chart generated successfully - sent via WebSocket
                         else:
                             raise Exception("Comprehensive comparison returned None")
                 except Exception as e:
@@ -3019,7 +3231,7 @@ def handle_input(text: str):
                             path = validate_and_plot_players_timeseries(players, norm_metric, seasons_for_query, text)
                             if path:
                                 charts_created.append((metric, path))
-                                print(f"✅ {metric.capitalize()} comparison chart: {path}")
+                                # Chart generated successfully - sent via WebSocket
             else:
                 # For 3+ players, use standard time series charts
                 for metric in ["goals", "assists"][:2]:
@@ -3028,14 +3240,14 @@ def handle_input(text: str):
                         path = validate_and_plot_players_timeseries(players, norm_metric, seasons_for_query, text)
                         if path:
                             charts_created.append((metric, path))
-                            print(f"✅ {metric.capitalize()} comparison chart: {path}")
+                            # Chart generated successfully - sent via WebSocket
 
                 # Generate radar chart (percentiles)
                 if len(metrics_to_compare) >= 3:
                     radar_path = validate_and_plot_radar(players, metrics_to_compare[:6], seasons_for_query, text)
                     if radar_path:
                         charts_created.append(("radar", radar_path))
-                        print(f"✅ Radar chart (percentiles): {radar_path}")
+                        # Chart generated successfully - sent via WebSocket
 
                 # Generate head-to-head bar chart for latest season
                 try:
@@ -3075,7 +3287,7 @@ def handle_input(text: str):
                     bar_path = f"comparison_bars_{int(time.time())}.png"
                     safe_save_plot(fig, bar_path)
                     charts_created.append(("head_to_head", bar_path))
-                    print(f"✅ Head-to-head bar chart: {bar_path}")
+                    # Chart generated successfully - sent via WebSocket
                 except Exception as e:
                     dbg("Error creating head-to-head chart: %s", e)
 
@@ -3089,7 +3301,7 @@ def handle_input(text: str):
                     "hits": hits
                 })
 
-            comparison_prompt = f"""You are a football analyst. Compare these players in detail:
+            comparison_prompt = f"""You are a football analyst. Compare ALL {len(players)} players in detail:
 
 """
             for i, data in enumerate(comparison_data, 1):
@@ -3097,19 +3309,38 @@ def handle_input(text: str):
 
             comparison_prompt += f"""
 
-Provide a comprehensive comparison covering:
-1. Playing positions and roles
-2. Goal-scoring vs. playmaking abilities
-3. Key statistical differences
-4. Playing styles and strengths
-5. Career progression and notable achievements
+Write a comprehensive comparison covering ALL {len(players)} players with these sections:
 
-Be detailed (5-8 sentences) and factual based only on the data provided."""
+OVERVIEW
+Write 3-4 sentences comparing their positions and overall playing styles. Mention ALL {len(players)} players by name and their key characteristics.
 
-            print("\n📝 Analysis:\n")
+GOAL SCORING VS PLAYMAKING
+Write a detailed paragraph (4-5 sentences) comparing their goal-scoring records and creative contributions. Include specific numbers for ALL {len(players)} players. For example: "In the 2022-23 season, [Player 1] scored X goals and provided Y assists, while [Player 2] netted Z goals with W assists..." Continue for all players.
+
+KEY STATISTICAL DIFFERENCES
+Write a paragraph (4-5 sentences) highlighting important statistical comparisons across ALL {len(players)} players. Use metrics like goals per 90, xG, progressive passes, etc. Make direct comparisons with numbers.
+
+PLAYING STYLES & STRENGTHS
+Write a detailed paragraph (5-6 sentences) describing each player's distinct playing style and strengths. Cover ALL {len(players)} players, explaining what makes each unique.
+
+CAREER PROGRESSION
+Write 2-3 sentences summarizing notable achievements and career highlights for ALL {len(players)} players.
+
+IMPORTANT RULES:
+- You MUST discuss ALL {len(players)} players throughout the analysis
+- Write in flowing paragraphs, not bullet points
+- Use section headers in ALL CAPS
+- Include specific statistics and numbers
+- Keep it readable and well-structured
+- No markdown formatting, asterisks, or special characters
+- Make it comprehensive but scannable"""
+
+            # Increase token limit for multi-player comparisons
+            max_tokens = 1500 if len(players) == 2 else 2000
+
             try:
-                ans = llm.predict(comparison_prompt, max_tokens=700, temperature=0.0)
-                print(ans)
+                ans = llm.predict(comparison_prompt, max_tokens=max_tokens, temperature=0.0)
+                print("\n" + ans)
             except Exception as e:
                 dbg("Comparison LLM error: %s", e)
                 print("Based on the data, here's what stands out about each player:")
@@ -3117,7 +3348,6 @@ Be detailed (5-8 sentences) and factual based only on the data provided."""
                     ans = llm_fallback_answer(f"Summarize {data['player']}'s key stats", data['context'], data['hits'])
                     print(f"\n{data['player']}: {ans}")
 
-            print(f"\n\n📁 Charts saved: {len(charts_created)} visualizations created")
             print()
             push_context(players, intent, hits=None)
             return
@@ -3150,7 +3380,9 @@ Use the context below to provide a thoughtful answer:
 
 {combined_rag_ctx}
 
-Answer their question directly and comprehensively (3-5 sentences), considering the comparison between these players."""
+Answer their question directly and comprehensively (3-5 sentences), considering the comparison between these players.
+
+IMPORTANT: Use plain text only. Do NOT use markdown formatting like ** for bold or __ for italics. Write in clear, natural language with proper punctuation and structure."""
 
                 ans = llm.predict(enhanced_prompt, max_tokens=500, temperature=0.0)
                 push_context(players, intent, hits=all_hits)
@@ -3171,6 +3403,22 @@ Answer their question directly and comprehensively (3-5 sentences), considering 
                 # Print the answer directly - no DATA_MISSING checking for biographical queries
                 print("\n", ans)
                 print()
+
+                # Generate radar chart for single player queries
+                if players and len(players) == 1:
+                    try:
+                        # Get key metrics for the player
+                        key_metrics = ["goals", "assists", "xg", "npxg", "progressive_carries", "progressive_passes"]
+                        available_cols = get_available_columns()
+                        metrics_to_chart = [normalize_metric_token(m, available_cols) for m in key_metrics if normalize_metric_token(m, available_cols)]
+
+                        if len(metrics_to_chart) >= 3:
+                            dbg("Generating radar chart for single player: %s", players[0])
+                            radar_path = validate_and_plot_radar(players, metrics_to_chart[:6], seasons_for_query, text)
+                            # Chart is generated silently - no need to print the path
+                    except Exception as e:
+                        dbg("Error generating radar chart for single player: %s", e)
+
                 return
 
         # If it's explicitly a plot/aggregate request, ask for metrics with context-aware defaults
@@ -3337,7 +3585,46 @@ Answer their question directly and comprehensively (3-5 sentences), considering 
 
     # Handle "list" intent - filter players by team/position
     if intent == "list" and (team or position):
-        dbg("Handling list intent: team=%s position=%s seasons_back=%s", team, position, seasons_for_query)
+        dbg("Handling list intent: team=%s position=%s limit=%s sort_by=%s seasons_back=%s", team, position, intent_struct.get("limit"), intent_struct.get("sort_by"), seasons_for_query)
+
+        # Check if user is EXPLICITLY asking for current year or very recent information
+        from datetime import datetime
+        current_year = datetime.now().year
+        current_month = datetime.now().month
+
+        # Only trigger LLM fallback if user explicitly mentions current year or very specific time indicators
+        # More strict detection - only for phrases that clearly mean "right now"
+        text_lower = text.lower()
+        explicit_current_indicators = [
+            f"{current_year}",  # Explicit year mention
+            "right now",
+            "at the moment",
+            "as of today",
+            "most recent",
+            "up to date"
+        ]
+        is_explicitly_asking_current = any(indicator in text_lower for indicator in explicit_current_indicators)
+
+        # Also check for "current" or "now" or "today" combined with year context
+        has_current_keyword = any(word in text_lower for word in ["current", "now", "today"])
+        mentions_recent_year = str(current_year) in text or str(current_year - 1) in text
+
+        is_asking_very_recent = is_explicitly_asking_current or (has_current_keyword and mentions_recent_year)
+
+        # Our database has seasons: 20-21, 21-22, 22-23, 23-24, 24-25
+        # Latest season is 24-25 which covers mid-2024 to mid-2025
+        latest_season_end_year = 2025  # 24-25 season ends around mid-2025
+
+        if is_asking_very_recent and current_year >= latest_season_end_year and current_month > 6:
+            # User is explicitly asking for current info but we only have data up to 24-25 season
+            print(f"\n📊 Note: My database contains seasons 2020-21 through 2024-25.")
+            print(f"For up-to-date {current_year} information, I'll check current sources...\n")
+
+            # Use LLM fallback to get current info from internet
+            ans = llm_fallback_answer(text, "", [])
+            print(ans)
+            print()
+            return
 
         # Normalize position to canonical form (fw/mf/df/gk)
         position_canonical = None
@@ -3358,11 +3645,80 @@ Answer their question directly and comprehensively (3-5 sentences), considering 
             player_list = result["players"]
             dbg("filter_players returned %d players", len(player_list))
 
+            # If limit and sort_by are specified, rank players by stats
+            limit = intent_struct.get("limit")
+            sort_by = intent_struct.get("sort_by")
+
+            if limit and sort_by and len(player_list) > 0:
+                dbg("Ranking players by %s and taking top %d", sort_by, limit)
+
+                # Get aggregate stats for each player
+                player_stats = []
+                for player_name in player_list[:100]:  # Limit to 100 to avoid too many API calls
+                    stat = aggregate_mcp(player_name, stat=sort_by, seasons_back=seasons_for_query)
+                    if isinstance(stat, dict) and stat.get("found"):
+                        total_value = 0
+                        for year_data in stat.get("data", []):
+                            val = year_data.get("value")
+                            if val is not None:
+                                # For latest season, use that value. Otherwise sum across seasons.
+                                if seasons_for_query == 1:
+                                    total_value = val
+                                    break
+                                else:
+                                    total_value += val
+
+                        player_stats.append({
+                            "name": player_name,
+                            "value": total_value,
+                            "stat": stat
+                        })
+
+                # Sort by value (descending)
+                player_stats.sort(key=lambda x: x["value"], reverse=True)
+
+                # Take top N
+                top_players = player_stats[:limit]
+
+                if len(top_players) == 0:
+                    print(f"No data available for {position or 'players'} from {team or 'all teams'}.")
+                else:
+                    # Format the response
+                    position_name = "forwards" if position_canonical == "FW" else "defenders" if position_canonical == "DF" else "midfielders" if position_canonical == "MF" else "goalkeepers" if position_canonical == "GK" else "players"
+                    header = f"{team}'s " if team else ""
+                    if limit == 3 and position_canonical == "FW":
+                        header += "front three"
+                    elif limit == 4 and position_canonical == "DF":
+                        header += "back four"
+                    else:
+                        header += f"top {limit} {position_name}"
+
+                    # Determine season label for output
+                    if seasons_for_query == 1:
+                        season_label = "2024-25 season"
+                    else:
+                        season_label = f"past {seasons_for_query} seasons (2020-25)"
+
+                    print(f"\n{header} ({season_label}, by {sort_by}):\n")
+                    for i, player in enumerate(top_players, 1):
+                        print(f"{i}. {player['name'].title()} - {player['value']:.1f} {sort_by.replace('_', ' ')}")
+
+                push_context([p["name"] for p in top_players], intent, hits=None)
+                print()
+                return
+
+            # Original behavior when no limit/sort_by
             # Format the response
             if len(player_list) == 0:
-                print(f"No {position or 'players'} found for {team or 'all teams'} in the past {seasons_for_query} seasons.")
+                print(f"No {position or 'players'} found for {team or 'all teams'} in the database (seasons 2020-25).")
             else:
-                header = f"{'Strikers' if position and 'striker' in position.lower() else position or 'Players'} from {team or 'all teams'} (past {seasons_for_query} seasons):"
+                # Determine season label
+                if seasons_for_query == 1:
+                    season_label = "2024-25 season"
+                else:
+                    season_label = f"past {seasons_for_query} seasons (2020-25)"
+
+                header = f"{'Strikers' if position and 'striker' in position.lower() else position or 'Players'} from {team or 'all teams'} ({season_label}):"
                 print(f"\n{header}")
                 print(f"Found {len(player_list)} player(s):\n")
                 for i, player in enumerate(player_list[:50], 1):  # Limit to first 50
