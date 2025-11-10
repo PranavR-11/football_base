@@ -1,0 +1,73 @@
+version: "3.8"
+
+services:
+  api:
+    build:
+      context: ../..
+      dockerfile: api/Dockerfile
+    container_name: football_api
+    restart: unless-stopped
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - MCP_API_KEY=${MCP_API_KEY:-}
+      - DATA_PATH=${DATA_PATH:-/app/data/FINAL_with_rag.csv}
+      - VECTORSTORE_DIR=${VECTORSTORE_DIR:-/app/data/vectorstore}
+      - MODEL_PATH=${MODEL_PATH:-/app/models/ridge_player_model.joblib}
+      - AGENT_DEBUG=${AGENT_DEBUG:-False}
+    volumes:
+      # Mount data directory for CSV and vectorstore
+      - ../../data:/app/data:ro
+      # Mount models directory
+      - ../../models:/app/models:ro
+      # Mount scripts directory for agent code
+      - ../../scripts:/app/scripts:ro
+      # Volume for generated images (writable)
+      - generated_images:/app/generated
+    expose:
+      - "8000"
+    mem_limit: 750m
+    mem_reservation: 512m
+    cpus: 0.8
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    networks:
+      - app_network
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: football_caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"  # HTTP/3
+    environment:
+      - DOMAIN=${DOMAIN:-api.yourdomain.com}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    mem_limit: 128m
+    mem_reservation: 64m
+    cpus: 0.2
+    depends_on:
+      api:
+        condition: service_healthy
+    networks:
+      - app_network
+
+volumes:
+  caddy_data:
+    driver: local
+  caddy_config:
+    driver: local
+  generated_images:
+    driver: local
+
+networks:
+  app_network:
+    driver: bridge
