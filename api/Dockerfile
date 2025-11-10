@@ -1,12 +1,12 @@
 # api/Dockerfile — multi-stage, builds a venv in the builder stage
 FROM python:3.11-slim as builder
 
-# Install build deps needed for compiling binary wheels
+# Install build deps needed for compiling binary wheels (libgomp1 required by faiss/OpenMP)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     gcc \
     g++ \
-    libgomp1 \           # required by faiss / OpenMP
+    libgomp1 \
     && rm -rf /var/lib/apt/lists/*
 
 # Create virtual environment
