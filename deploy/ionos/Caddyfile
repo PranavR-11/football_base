@@ -1,25 +1,7 @@
-# Caddyfile for Football Analytics API
-# Automatically handles HTTPS with Let's Encrypt
-
-{
-    # Global options
-    email your-email@example.com  # Replace with your email for Let's Encrypt notifications
-
+{$DOMAIN:api.yourdomain.com} {
     # Enable compression
     encode gzip zstd
 
-    # Logging
-    log {
-        output file /data/caddy/access.log {
-            roll_size 10mb
-            roll_keep 5
-        }
-        format json
-    }
-}
-
-# Replace {$DOMAIN} with your actual domain (e.g., api.yourdomain.com)
-{$DOMAIN:api.yourdomain.com} {
     # Reverse proxy to FastAPI backend
     reverse_proxy api:8000 {
         # WebSocket support
@@ -39,39 +21,4 @@
             write_timeout 120s
         }
     }
-
-    # CORS headers (if not handled by FastAPI)
-    header {
-        # Remove server identification
-        -Server
-
-        # Security headers
-        X-Content-Type-Options "nosniff"
-        X-Frame-Options "DENY"
-        Referrer-Policy "strict-origin-when-cross-origin"
-    }
-
-    # Rate limiting (optional - uncomment to enable)
-    # rate_limit {
-    #     zone api_zone {
-    #         key {remote}
-    #         events 100
-    #         window 1m
-    #     }
-    # }
-
-    # Logging for this domain
-    log {
-        output file /data/caddy/{$DOMAIN}.log {
-            roll_size 10mb
-            roll_keep 5
-        }
-        format json
-    }
 }
-
-# HTTP redirect variant (optional - Caddy does this automatically)
-# Uncomment if you want explicit HTTP->HTTPS redirect logging
-# http://{$DOMAIN} {
-#     redir https://{$DOMAIN}{uri} permanent
-# }
