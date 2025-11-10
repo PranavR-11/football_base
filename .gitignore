@@ -36,3 +36,23 @@ out.bin
 
 # Git LFS placeholder (if you later use LFS)
 *.lfs
+
+# Documentation and notes (local only)
+BUGFIXES.md
+IMPLEMENTATION_STATUS.md
+NEXT_STEPS.md
+README_IMPLEMENTATION.md
+REFACTORING_PROGRESS.md
+SUMMARY.md
+USAGE_GUIDE.md
+
+# Backup and test files
+*.bak
+test_*.py
+scripts/extract_remaining.py
+scripts/refactor_agent.py
+scripts/remove_all_dups.py
+scripts/remove_plotting_dups.py
+
+# Agent refactoring work (local only)
+scripts/agent/
