@@ -41,8 +41,9 @@ services:
       - VECTORSTORE_DIR=${VECTORSTORE_DIR:-/app/data/vectorstore}
       - MODEL_PATH=${MODEL_PATH:-/app/models/ridge_player_model.joblib}
       - AGENT_DEBUG=${AGENT_DEBUG:-False}
+      - AGENT_CACHE_DB=/app/cache/agent_cache.sqlite
     volumes:
-      # Mount data directory for CSV and vectorstore
+      # Mount data directory for CSV and vectorstore (read-only for safety)
       - ../../data:/app/data:ro
       # Mount models directory
       - ../../models:/app/models:ro
@@ -50,6 +51,8 @@ services:
       - ../../scripts:/app/scripts:ro
       # Volume for generated images (writable)
       - generated_images:/app/generated
+      # Volume for agent cache database (writable)
+      - agent_cache:/app/cache
     expose:
       - "8000"
     mem_limit: 600m
@@ -96,6 +99,8 @@ volumes:
   caddy_config:
     driver: local
   generated_images:
+    driver: local
+  agent_cache:
     driver: local
 
 networks:

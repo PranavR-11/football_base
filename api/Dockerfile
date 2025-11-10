@@ -40,8 +40,8 @@ COPY api/ ./api/
 COPY scripts/ ./scripts/
 # If mcp is separate:
 COPY mcp/ ./mcp/
-# create data+models dirs (mount them at runtime)
-RUN mkdir -p /app/data /app/data/vectorstore /app/models
+# create data+models+cache dirs (mount them at runtime)
+RUN mkdir -p /app/data /app/data/vectorstore /app/models /app/cache
 
 # Expose port
 EXPOSE 8000
