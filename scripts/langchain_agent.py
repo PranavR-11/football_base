@@ -1012,6 +1012,105 @@ def normalize_name(name: str) -> str:
     s = re.sub(r"\s+", " ", s).strip()
     return s
 
+# ---------------- Team name normalization ----------------
+TEAM_ALIASES = {
+    # English Premier League
+    "man city": "manchester city",
+    "mancity": "manchester city",
+    "man utd": "manchester utd",
+    "man united": "manchester utd",
+    "manutd": "manchester utd",
+    "manchester united": "manchester utd",
+    "spurs": "tottenham",
+    "arsenal": "arsenal",
+    "chelsea": "chelsea",
+    "liverpool": "liverpool",
+    "newcastle": "newcastle utd",
+    "west ham": "west ham",
+    "brighton": "brighton",
+    "crystal palace": "crystal palace",
+    "everton": "everton",
+    "fulham": "fulham",
+    "aston villa": "aston villa",
+    "wolves": "wolves",
+
+    # La Liga
+    "barca": "barcelona",
+    "barça": "barcelona",
+    "barcelona": "barcelona",
+    "real madrid": "real madrid",
+    "madrid": "real madrid",
+    "atletico": "atlético madrid",
+    "atletico madrid": "atlético madrid",
+    "atleti": "atlético madrid",
+    "sevilla": "sevilla",
+    "valencia": "valencia",
+    "villarreal": "villarreal",
+    "real sociedad": "real sociedad",
+    "athletic club": "athletic club",
+    "athletic": "athletic club",
+    "betis": "real betis",
+    "real betis": "real betis",
+
+    # Bundesliga
+    "bayern": "bayern munich",
+    "bayern munich": "bayern munich",
+    "dortmund": "dortmund",
+    "bvb": "dortmund",
+    "leipzig": "rb leipzig",
+    "rb leipzig": "rb leipzig",
+    "leverkusen": "leverkusen",
+    "bayer leverkusen": "leverkusen",
+
+    # Serie A
+    "inter": "inter",
+    "inter milan": "inter",
+    "milan": "milan",
+    "ac milan": "milan",
+    "juve": "juventus",
+    "juventus": "juventus",
+    "roma": "roma",
+    "napoli": "napoli",
+    "lazio": "lazio",
+    "atalanta": "atalanta",
+    "fiorentina": "fiorentina",
+
+    # Ligue 1
+    "psg": "paris s-g",
+    "paris": "paris s-g",
+    "paris saint-germain": "paris s-g",
+    "paris sg": "paris s-g",
+    "marseille": "marseille",
+    "om": "marseille",
+    "lyon": "lyon",
+    "ol": "lyon",
+    "monaco": "monaco",
+    "lille": "lille",
+}
+
+def normalize_team_name(team: Optional[str]) -> Optional[str]:
+    """
+    Normalize team name to match database format.
+    - Converts to lowercase
+    - Handles common aliases (Barca -> barcelona, Man City -> manchester city)
+    - Strips extra whitespace
+    """
+    if not team:
+        return None
+
+    team_lower = team.lower().strip()
+    team_lower = re.sub(r"\s+", " ", team_lower)  # Collapse multiple spaces
+
+    # Check if it's an alias
+    if team_lower in TEAM_ALIASES:
+        canonical = TEAM_ALIASES[team_lower]
+        dbg("Normalized team '%s' -> '%s'", team, canonical)
+        return canonical
+
+    # Return lowercase version
+    dbg("Team '%s' -> '%s' (no alias match)", team, team_lower)
+    return team_lower
+
 def extract_candidate_names_from_text(text: str, max_candidates: int = 4) -> List[str]:
     """Heuristic: find titlecase sequences (1-3 words) as candidate names."""
     if not text:
@@ -2786,7 +2885,7 @@ def handle_input(text: str):
                     intent_struct = orig_intent
                     intent = intent_struct.get("intent", classify_intent(text))
                     players = all_players
-                    team = intent_struct.get("team")
+                    team = normalize_team_name(intent_struct.get("team"))
                     position = intent_struct.get("position")
                     raw_metrics = intent_struct.get("metrics")
                     seasons_back = intent_struct.get("seasons_back") or None
@@ -2823,7 +2922,7 @@ def handle_input(text: str):
             intent_struct = orig_intent
             intent = intent_struct.get("intent", classify_intent(text))
             players = all_players  # Use all resolved players
-            team = intent_struct.get("team")
+            team = normalize_team_name(intent_struct.get("team"))
             position = intent_struct.get("position")
             raw_metrics = intent_struct.get("metrics")
             seasons_back = intent_struct.get("seasons_back") or None
@@ -2900,7 +2999,7 @@ def handle_input(text: str):
             dbg("Overriding LLM intent with rule-based 'ranking' detection")
 
         players = intent_struct.get("players") or []
-        team = intent_struct.get("team")
+        team = normalize_team_name(intent_struct.get("team"))
         position = intent_struct.get("position")
         raw_metrics = intent_struct.get("metrics")
         seasons_back = intent_struct.get("seasons_back") or None
