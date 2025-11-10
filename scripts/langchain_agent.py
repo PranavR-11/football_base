@@ -982,10 +982,19 @@ def resolve_pronouns_in_player_list(players: List[str], query_text: str = "") ->
             if is_new_question:
                 dbg("Not resolving pronoun '%s' - detected new question pattern", player)
                 resolved.append(player)
-            # Replace pronoun with last player from context
+            # Replace pronoun with player(s) from context
             elif CONTEXT["last_players"]:
-                resolved.append(CONTEXT["last_players"][0])
-                dbg("Resolved pronoun '%s' to last player '%s'", player, CONTEXT["last_players"][0])
+                # PLURAL pronouns should resolve to multiple players
+                if player_lower in {"they", "them", "themselves"}:
+                    # For comparisons, we need at least 2 players
+                    num_players = min(len(CONTEXT["last_players"]), 3 if is_comparison else 2)
+                    for p in CONTEXT["last_players"][:num_players]:
+                        resolved.append(p)
+                    dbg("Resolved plural pronoun '%s' to %d players: %s", player, num_players, CONTEXT["last_players"][:num_players])
+                else:
+                    # Singular pronoun, just add first player
+                    resolved.append(CONTEXT["last_players"][0])
+                    dbg("Resolved singular pronoun '%s' to last player '%s'", player, CONTEXT["last_players"][0])
             else:
                 dbg("Found pronoun '%s' but no context player available", player)
                 # Keep the pronoun as-is, will be handled later
