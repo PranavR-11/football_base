@@ -2966,9 +2966,13 @@ def handle_input(text: str):
         sys.exit(0)
 
     # Detect language for this query and store in CONTEXT
-    detected_lang = detect_language(text)
-    CONTEXT["detected_language"] = detected_lang
-    dbg("Language detected for this query: %s", detected_lang)
+    # BUT: If UI already set a language preference, use that instead of auto-detecting
+    if "detected_language" not in CONTEXT or not CONTEXT["detected_language"]:
+        detected_lang = detect_language(text)
+        CONTEXT["detected_language"] = detected_lang
+        dbg("Language auto-detected for this query: %s", detected_lang)
+    else:
+        dbg("Using UI-selected language: %s", CONTEXT["detected_language"])
 
     # Flag to track if we resolved disambiguation (skip re-parsing if true)
     resolved_disambiguation = False
