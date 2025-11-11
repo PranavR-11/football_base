@@ -1,6 +1,7 @@
 """
 FastAPI backend that wraps the langchain football agent.
 This serves as the API layer between the web frontend and your Python agent.
+Version: 1.2 - Language translation support
 """
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
