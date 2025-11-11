@@ -302,20 +302,12 @@ export default function Home() {
 
   // Video clips for background (add your video files to public/videos/ folder)
   const videoClips = [
-    '/videos/player1.mp4',
-    '/videos/player2.mp4',
-    '/videos/player3.mp4',
+    { src: '/videos/player1.mp4', position: 'top-left' },
+    { src: '/videos/player2.mp4', position: 'top-right' },
+    { src: '/videos/player3.mp4', position: 'bottom-left' },
+    { src: '/videos/player4.mp4', position: 'bottom-right' },
+    { src: '/videos/player5.mp4', position: 'center' },
   ]
-
-  // Rotate videos every 5 seconds
-  useEffect(() => {
-    if (messages.length === 0 && videoClips.length > 1) {
-      const interval = setInterval(() => {
-        setCurrentVideoIndex((prev) => (prev + 1) % videoClips.length)
-      }, 5000)
-      return () => clearInterval(interval)
-    }
-  }, [messages.length, videoClips.length])
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -504,6 +496,24 @@ export default function Home() {
     document.body.removeChild(link)
   }
 
+  const getVideoPositionStyles = (position: string) => {
+    const baseStyles = "absolute w-80 h-60 rounded-2xl overflow-hidden shadow-2xl border-2 border-green-500/20"
+    switch(position) {
+      case 'top-left':
+        return `${baseStyles} top-24 left-8`
+      case 'top-right':
+        return `${baseStyles} top-24 right-8`
+      case 'bottom-left':
+        return `${baseStyles} bottom-8 left-8`
+      case 'bottom-right':
+        return `${baseStyles} bottom-8 right-8`
+      case 'center':
+        return `${baseStyles} top-1/2 left-8 transform -translate-y-1/2`
+      default:
+        return baseStyles
+    }
+  }
+
   return (
     <div className="min-h-screen relative overflow-hidden">
       {/* Stadium Background Image */}
@@ -518,14 +528,52 @@ export default function Home() {
       {/* Green gradient overlay to maintain theme */}
       <div className="absolute inset-0 bg-gradient-to-br from-emerald-950/70 via-green-900/65 to-teal-950/70"></div>
 
+      {/* Player Video Clips - Multiple positions across the page */}
+      {messages.length === 0 && videoClips.map((clip, index) => (
+        <div
+          key={clip.src}
+          className={getVideoPositionStyles(clip.position)}
+          style={{
+            animation: `fadeInScale 0.8s ease-out ${index * 0.2}s both`,
+            zIndex: 1
+          }}
+        >
+          <video
+            autoPlay
+            loop
+            muted
+            playsInline
+            className="w-full h-full object-cover"
+            style={{ filter: 'brightness(0.7)' }}
+          >
+            <source src={clip.src} type="video/mp4" />
+          </video>
+          <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent pointer-events-none"></div>
+        </div>
+      ))}
+
       {/* Football pitch pattern overlay */}
       <div className="absolute inset-0 opacity-10" style={{
         backgroundImage: `
           linear-gradient(0deg, transparent 24%, rgba(255, 255, 255, .05) 25%, rgba(255, 255, 255, .05) 26%, transparent 27%, transparent 74%, rgba(255, 255, 255, .05) 75%, rgba(255, 255, 255, .05) 76%, transparent 77%, transparent),
           linear-gradient(90deg, transparent 24%, rgba(255, 255, 255, .05) 25%, rgba(255, 255, 255, .05) 26%, transparent 27%, transparent 74%, rgba(255, 255, 255, .05) 75%, rgba(255, 255, 255, .05) 76%, transparent 77%, transparent)
         `,
-        backgroundSize: '50px 50px'
+        backgroundSize: '50px 50px',
+        zIndex: 2
       }}></div>
+
+      <style jsx>{`
+        @keyframes fadeInScale {
+          from {
+            opacity: 0;
+            transform: scale(0.8);
+          }
+          to {
+            opacity: 1;
+            transform: scale(1);
+          }
+        }
+      `}</style>
 
       {/* Animated football icons */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
@@ -578,29 +626,6 @@ export default function Home() {
         }`}>
           {/* Messages */}
           <div className="flex-1 overflow-y-auto p-6 space-y-4 bg-gradient-to-b from-black/20 to-transparent relative">
-            {/* Video Background - Only show when no messages */}
-            {messages.length === 0 && (
-              <div className="absolute inset-0 overflow-hidden">
-                {videoClips.map((video, index) => (
-                  <video
-                    key={video}
-                    autoPlay
-                    loop
-                    muted
-                    playsInline
-                    className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-1000 ${
-                      index === currentVideoIndex ? 'opacity-20' : 'opacity-0'
-                    }`}
-                    style={{ filter: 'brightness(0.5) blur(2px)' }}
-                  >
-                    <source src={video} type="video/mp4" />
-                  </video>
-                ))}
-                {/* Gradient overlay to ensure text readability */}
-                <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-transparent to-black/60"></div>
-              </div>
-            )}
-
             {messages.length === 0 && (
               <div className="text-center text-white/70 mt-32 relative z-10">
                 <div className="text-6xl mb-6 animate-bounce">⚽</div>
