@@ -1742,16 +1742,46 @@ def plot_group_timeseries(players: List[str], all_seasons: List[int], all_values
     ax.set_facecolor('none')
     yrs = np.array(all_seasons)
     colors = ['#FF6B6B', '#4ECDC4', '#FFD93D', '#A78BFA', '#F97316', '#14B8A6']
+
+    # Build legend labels with explanations for zero seasons
     for idx, p in enumerate(players):
         vals = all_values.get(p, [])
         arr = np.array([np.nan if v is None else float(v) for v in vals], dtype=float)
-        ax.plot(yrs, arr, marker='o', linestyle='-', label=p, linewidth=2.5, markersize=8, color=colors[idx % len(colors)])
+
+        # Check for zero/missing seasons and generate explanation
+        zero_seasons = []
+        for i, (season, val) in enumerate(zip(all_seasons, vals)):
+            if val is None or float(val) == 0.0:
+                zero_seasons.append(season)
+
+        # Create legend label
+        legend_label = p
+        if zero_seasons and len(zero_seasons) < len(all_seasons):  # Some but not all seasons are zero
+            # Generate short explanation using LLM
+            zero_seasons_str = ", ".join(str(s) for s in zero_seasons[:2])  # Show max 2 seasons
+            if len(zero_seasons) > 2:
+                zero_seasons_str += f" +{len(zero_seasons)-2} more"
+
+            try:
+                explanation_prompt = f"In 1-3 words, why does {p} have no {metric_name} data for season(s) {zero_seasons_str}? Common reasons: left Europe, lower league, injury, retired. Be very brief."
+                explanation = llm.predict(explanation_prompt, max_tokens=15, temperature=0.3).strip()
+                # Clean up explanation
+                explanation = explanation.replace('"', '').replace("'", "").strip('.')
+                if len(explanation) > 30:  # Too long, truncate
+                    explanation = explanation[:27] + "..."
+                legend_label = f"{p} ({zero_seasons_str}: {explanation})"
+            except:
+                # Fallback if LLM fails
+                legend_label = f"{p} ({zero_seasons_str}: no data)"
+
+        ax.plot(yrs, arr, marker='o', linestyle='-', label=legend_label, linewidth=2.5, markersize=8, color=colors[idx % len(colors)])
+
     ax.set_xticks(yrs)
     ax.set_xlabel("Season", fontsize=12, weight='bold', color='white')
     ax.set_ylabel(metric_name.replace('_', ' ').title(), fontsize=12, weight='bold', color='white')
     ax.set_title(f"Group Comparison: {metric_name.replace('_', ' ').title()} Over Time",
                  fontsize=14, weight='bold', color='white')
-    ax.legend(loc='best', fontsize=10, framealpha=0.9, labelcolor='white')
+    ax.legend(loc='best', fontsize=9, framealpha=0.9, labelcolor='white')
     ax.grid(True, alpha=0.3, color='white')
     ax.tick_params(colors='white')
     any_non_nan = False
