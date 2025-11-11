@@ -214,7 +214,19 @@ export default function Home() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-emerald-950 via-green-900 to-teal-950 relative overflow-hidden">
+    <div className="min-h-screen relative overflow-hidden">
+      {/* Stadium Background Image */}
+      <div
+        className="absolute inset-0 bg-cover bg-center bg-no-repeat"
+        style={{
+          backgroundImage: 'url(https://images.unsplash.com/photo-1522778119026-d647f0596c20?q=80&w=2070&auto=format&fit=crop)',
+          filter: 'brightness(0.3) saturate(0.8)'
+        }}
+      ></div>
+
+      {/* Green gradient overlay to maintain theme */}
+      <div className="absolute inset-0 bg-gradient-to-br from-emerald-950/90 via-green-900/85 to-teal-950/90"></div>
+
       {/* Football pitch pattern overlay */}
       <div className="absolute inset-0 opacity-10" style={{
         backgroundImage: `
