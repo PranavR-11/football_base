@@ -3463,21 +3463,36 @@ def handle_input(text: str):
                                 charts_created.append((metric, path))
                                 # Chart generated successfully - sent via WebSocket
             else:
-                # For 3+ players, use standard time series charts
-                for metric in ["goals", "assists"][:2]:
-                    norm_metric = normalize_metric_token(metric, available_cols)
-                    if norm_metric:
-                        path = validate_and_plot_players_timeseries(players, norm_metric, seasons_for_query, text)
-                        if path:
-                            charts_created.append((metric, path))
-                            # Chart generated successfully - sent via WebSocket
+                # For 3+ players, PRIORITIZE RADAR CHART (unless user explicitly asked for time series)
+                user_requested_viz = intent_struct.get("viz", "auto")
 
-                # Generate radar chart (percentiles)
-                if len(metrics_to_compare) >= 3:
+                if user_requested_viz in ["time_series", "both"]:
+                    # User explicitly wants time series - show line charts
+                    for metric in ["goals", "assists"][:2]:
+                        norm_metric = normalize_metric_token(metric, available_cols)
+                        if norm_metric:
+                            path = validate_and_plot_players_timeseries(players, norm_metric, seasons_for_query, text)
+                            if path:
+                                charts_created.append((metric, path))
+                                # Chart generated successfully - sent via WebSocket
+
+                # DEFAULT: Generate radar chart for multi-player comparison
+                if len(metrics_to_compare) >= 3 and user_requested_viz in ["auto", "radar", "both"]:
                     radar_path = validate_and_plot_radar(players, metrics_to_compare[:6], seasons_for_query, text)
                     if radar_path:
                         charts_created.append(("radar", radar_path))
                         # Chart generated successfully - sent via WebSocket
+
+                # Only show time series if radar wasn't created OR user specifically wanted both
+                if user_requested_viz == "auto" and not any(chart_type == "radar" for chart_type, _ in charts_created):
+                    # Fallback to time series if radar failed
+                    for metric in ["goals", "assists"][:2]:
+                        norm_metric = normalize_metric_token(metric, available_cols)
+                        if norm_metric:
+                            path = validate_and_plot_players_timeseries(players, norm_metric, seasons_for_query, text)
+                            if path:
+                                charts_created.append((metric, path))
+                                # Chart generated successfully - sent via WebSocket
 
                 # Generate head-to-head bar chart for latest season
                 try:
