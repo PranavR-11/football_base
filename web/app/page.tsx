@@ -515,7 +515,7 @@ export default function Home() {
             playsInline
             className="absolute inset-0 w-full h-full object-cover"
             style={{
-              filter: 'brightness(0.4) saturate(0.8) blur(1px)',
+              filter: 'brightness(0.7) saturate(0.9) blur(0.5px)',
             }}
           >
             <source src="/videos/1111-2.mp4" type="video/mp4" />
@@ -523,13 +523,13 @@ export default function Home() {
 
           {/* Multi-layered overlays for professional blend */}
           {/* Green tint overlay - brand consistency */}
-          <div className="absolute inset-0 bg-gradient-to-br from-emerald-900/60 via-green-950/70 to-teal-900/60 mix-blend-multiply"></div>
+          <div className="absolute inset-0 bg-gradient-to-br from-emerald-900/40 via-green-950/50 to-teal-900/40 mix-blend-multiply"></div>
 
           {/* Dark vignette overlay - focus on center */}
-          <div className="absolute inset-0 bg-gradient-radial from-transparent via-black/20 to-black/60"></div>
+          <div className="absolute inset-0 bg-gradient-radial from-transparent via-black/10 to-black/40"></div>
 
           {/* Top-to-bottom gradient - text protection */}
-          <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-transparent to-black/50"></div>
+          <div className="absolute inset-0 bg-gradient-to-b from-black/30 via-transparent to-black/40"></div>
         </div>
       )}
 
