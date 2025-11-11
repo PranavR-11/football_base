@@ -32,23 +32,46 @@ app.add_middleware(
 class ConnectionManager:
     def __init__(self):
         self.active_connections: list[WebSocket] = []
+        # Store conversation context per WebSocket session
+        self.session_contexts: dict[WebSocket, dict] = {}
 
     async def connect(self, websocket: WebSocket):
         await websocket.accept()
         self.active_connections.append(websocket)
+        # Initialize empty context for this session
+        self.session_contexts[websocket] = {
+            "last_players": [],
+            "last_intent": None,
+            "last_hits": None,
+            "history": [],
+            "pending_disambig": None
+        }
 
     def disconnect(self, websocket: WebSocket):
         self.active_connections.remove(websocket)
+        # Clean up session context
+        if websocket in self.session_contexts:
+            del self.session_contexts[websocket]
 
     async def send_message(self, message: dict, websocket: WebSocket):
         await websocket.send_json(message)
 
+    def get_context(self, websocket: WebSocket) -> dict:
+        """Get the conversation context for this WebSocket session."""
+        return self.session_contexts.get(websocket, {
+            "last_players": [],
+            "last_intent": None,
+            "last_hits": None,
+            "history": [],
+            "pending_disambig": None
+        })
+
 manager = ConnectionManager()
 
 
-async def run_agent_query(query: str) -> AsyncGenerator[dict, None]:
+async def run_agent_query(query: str, session_context: dict) -> AsyncGenerator[dict, None]:
     """
-    Run the agent directly (in-process) to maintain conversation state.
+    Run the agent directly (in-process) with session-specific context.
     """
     import re
     import io
@@ -56,8 +79,11 @@ async def run_agent_query(query: str) -> AsyncGenerator[dict, None]:
     import time
     from contextlib import redirect_stdout
 
-    # Import the agent module
-    from scripts.langchain_agent import handle_input
+    # Import the agent module and its CONTEXT
+    from scripts import langchain_agent
+
+    # Restore this session's context into the agent's global CONTEXT
+    langchain_agent.CONTEXT.update(session_context)
 
     # Track existing images before running agent
     existing_images = set(glob.glob('*.png'))
@@ -67,8 +93,11 @@ async def run_agent_query(query: str) -> AsyncGenerator[dict, None]:
 
     try:
         with redirect_stdout(output_buffer):
-            # Call the agent directly (maintains CONTEXT between calls)
-            handle_input(query)
+            # Call the agent (now with restored session context)
+            langchain_agent.handle_input(query)
+
+        # Save updated context back to session
+        session_context.update(langchain_agent.CONTEXT)
 
         # Get all output
         output_text = output_buffer.getvalue()
@@ -148,8 +177,11 @@ async def websocket_chat(websocket: WebSocket):
                 "content": "Processing your query..."
             }, websocket)
 
-            # Stream responses
-            async for response in run_agent_query(query):
+            # Get session context for this WebSocket connection
+            session_context = manager.get_context(websocket)
+
+            # Stream responses with session-specific context
+            async for response in run_agent_query(query, session_context):
                 await manager.send_message(response, websocket)
 
     except WebSocketDisconnect:
