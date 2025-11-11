@@ -1592,27 +1592,38 @@ def compute_percentile_in_cohort(value: float, cohort: List[float]) -> float:
 
 # ---------------- Plot helpers ----------------
 def safe_save_plot(fig, fname: str):
-    fig.savefig(fname, bbox_inches="tight")
+    # Save with transparent background to blend with dark UI
+    fig.savefig(fname, bbox_inches="tight", transparent=True, facecolor='none')
     plt.close(fig)
     return fname
 
 def plot_time_series_single(player: str, seasons: List[int], values: List[Optional[float]], metric_name: str, fname: str):
-    fig, ax = plt.subplots(figsize=(8,6))
+    # Apply dark theme for consistent styling
+    plt.style.use('dark_background')
+
+    fig, ax = plt.subplots(figsize=(8,6), facecolor='none')
+    ax.set_facecolor('none')
     yrs = np.array(seasons)
     vals = np.array([np.nan if v is None else float(v) for v in values], dtype=float)
-    ax.plot(yrs, vals, marker='o', linestyle='-', label=player)
+    ax.plot(yrs, vals, marker='o', linestyle='-', label=player, color='#4ECDC4', linewidth=2.5, markersize=8)
     ax.set_xticks(yrs)
-    ax.set_xlabel("Season")
-    ax.set_ylabel(metric_name)
-    ax.set_title(f"{player} — {metric_name} by season")
-    ax.grid(True)
+    ax.set_xlabel("Season", color='white', fontweight='bold')
+    ax.set_ylabel(metric_name, color='white', fontweight='bold')
+    ax.set_title(f"{player} — {metric_name} by season", color='white', fontweight='bold')
+    ax.grid(True, alpha=0.3, color='white')
     if np.all(np.isnan(vals)):
         plt.close(fig)
+        plt.style.use('default')
         return None
-    return safe_save_plot(fig, fname)
+    result = safe_save_plot(fig, fname)
+    plt.style.use('default')  # Reset style
+    return result
 
 def plot_group_bar_ranking(players: List[str], all_values: Dict[str, List[Optional[float]]], metric_name: str, fname: str):
     """Create a horizontal bar chart ranking players by total metric value"""
+    # Apply dark theme for consistent styling
+    plt.style.use('dark_background')
+
     # Calculate totals for each player
     player_totals = []
     for p in players:
@@ -1622,6 +1633,7 @@ def plot_group_bar_ranking(players: List[str], all_values: Dict[str, List[Option
             player_totals.append((p, total))
 
     if not player_totals:
+        plt.style.use('default')
         return None
 
     # Sort by total (descending)
@@ -1635,28 +1647,32 @@ def plot_group_bar_ranking(players: List[str], all_values: Dict[str, List[Option
     totals = [p[1] for p in player_totals]
 
     # Create horizontal bar chart
-    fig, ax = plt.subplots(figsize=(10, max(8, len(names) * 0.4)))
-    colors = plt.cm.viridis(np.linspace(0.3, 0.9, len(names)))
-    bars = ax.barh(names, totals, color=colors, edgecolor='black', linewidth=0.5)
+    fig, ax = plt.subplots(figsize=(10, max(8, len(names) * 0.4)), facecolor='none')
+    ax.set_facecolor('none')
+    colors = plt.cm.plasma(np.linspace(0.2, 0.9, len(names)))
+    bars = ax.barh(names, totals, color=colors, edgecolor='white', linewidth=1)
 
     # Add value labels on bars
     for i, (bar, total) in enumerate(zip(bars, totals)):
         width = bar.get_width()
         ax.text(width + max(totals) * 0.01, bar.get_y() + bar.get_height()/2,
                 f'{int(total)}',
-                ha='left', va='center', fontsize=9, weight='bold')
+                ha='left', va='center', fontsize=9, weight='bold', color='white')
 
-    ax.set_xlabel(f'Total {metric_name.replace("_", " ").title()}', fontsize=12, weight='bold')
+    ax.set_xlabel(f'Total {metric_name.replace("_", " ").title()}', fontsize=12, weight='bold', color='white')
     ax.set_title(f'Player Ranking by Total {metric_name.replace("_", " ").title()}',
-                 fontsize=14, weight='bold', pad=15)
-    ax.grid(axis='x', alpha=0.3)
+                 fontsize=14, weight='bold', pad=15, color='white')
+    ax.grid(axis='x', alpha=0.3, color='white')
     ax.set_axisbelow(True)
+    ax.tick_params(colors='white')
 
     # Invert y-axis so #1 is at top
     ax.invert_yaxis()
 
     plt.tight_layout()
-    return safe_save_plot(fig, fname)
+    result = safe_save_plot(fig, fname)
+    plt.style.use('default')  # Reset style
+    return result
 
 def plot_group_timeseries(players: List[str], all_seasons: List[int], all_values: Dict[str, List[Optional[float]]], metric_name: str, fname: str):
     # For large groups (10+ players), use bar chart ranking instead of congested line chart
@@ -1664,19 +1680,25 @@ def plot_group_timeseries(players: List[str], all_seasons: List[int], all_values
         dbg("Using bar chart ranking for large group (%d players)", len(players))
         return plot_group_bar_ranking(players, all_values, metric_name, fname)
 
-    fig, ax = plt.subplots(figsize=(10,7))
+    # Apply dark theme for consistent styling
+    plt.style.use('dark_background')
+
+    fig, ax = plt.subplots(figsize=(10,7), facecolor='none')
+    ax.set_facecolor('none')
     yrs = np.array(all_seasons)
-    for p in players:
+    colors = ['#FF6B6B', '#4ECDC4', '#FFD93D', '#A78BFA', '#F97316', '#14B8A6']
+    for idx, p in enumerate(players):
         vals = all_values.get(p, [])
         arr = np.array([np.nan if v is None else float(v) for v in vals], dtype=float)
-        ax.plot(yrs, arr, marker='o', linestyle='-', label=p, linewidth=2, markersize=7)
+        ax.plot(yrs, arr, marker='o', linestyle='-', label=p, linewidth=2.5, markersize=8, color=colors[idx % len(colors)])
     ax.set_xticks(yrs)
-    ax.set_xlabel("Season", fontsize=12, weight='bold')
-    ax.set_ylabel(metric_name.replace('_', ' ').title(), fontsize=12, weight='bold')
+    ax.set_xlabel("Season", fontsize=12, weight='bold', color='white')
+    ax.set_ylabel(metric_name.replace('_', ' ').title(), fontsize=12, weight='bold', color='white')
     ax.set_title(f"Group Comparison: {metric_name.replace('_', ' ').title()} Over Time",
-                 fontsize=14, weight='bold')
-    ax.legend(loc='best', fontsize=10, framealpha=0.9)
-    ax.grid(True, alpha=0.3)
+                 fontsize=14, weight='bold', color='white')
+    ax.legend(loc='best', fontsize=10, framealpha=0.9, labelcolor='white')
+    ax.grid(True, alpha=0.3, color='white')
+    ax.tick_params(colors='white')
     any_non_nan = False
     for p in players:
         arr = np.array([v for v in all_values.get(p, []) if v is not None])
@@ -1685,8 +1707,11 @@ def plot_group_timeseries(players: List[str], all_seasons: List[int], all_values
             break
     if not any_non_nan:
         plt.close(fig)
+        plt.style.use('default')  # Reset style
         return None
-    return safe_save_plot(fig, fname)
+    result = safe_save_plot(fig, fname)
+    plt.style.use('default')  # Reset style
+    return result
 
 def plot_group_radar(players: List[str], metric_labels: List[str], players_percentiles: Dict[str, List[float]], fname: str, actual_values: Optional[Dict[str, Dict[str, float]]] = None, players_seasons: Optional[Dict[str, Optional[str]]] = None):
     # Apply dark theme to match comparison charts
