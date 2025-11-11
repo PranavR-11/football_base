@@ -744,6 +744,10 @@ export default function Home() {
                 placeholder={`⚽ ${t.placeholder}`}
                 className="flex-1 bg-gray-900/80 border-2 border-green-500/30 rounded-xl px-6 py-4 text-white placeholder-green-400/40 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-400 backdrop-blur-sm transition-all"
                 disabled={!isConnected || isLoading}
+                autoComplete="off"
+                autoCorrect="off"
+                autoCapitalize="off"
+                spellCheck="false"
               />
               <button
                 onClick={() => sendMessage()}
