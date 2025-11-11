@@ -515,21 +515,17 @@ export default function Home() {
             playsInline
             className="absolute inset-0 w-full h-full object-cover"
             style={{
-              filter: 'brightness(0.7) saturate(0.9) blur(0.5px)',
+              filter: 'brightness(0.8) saturate(1.0)',
             }}
           >
             <source src="/videos/1111-2.mp4" type="video/mp4" />
           </video>
 
-          {/* Multi-layered overlays for professional blend */}
-          {/* Green tint overlay - brand consistency */}
-          <div className="absolute inset-0 bg-gradient-to-br from-emerald-900/40 via-green-950/50 to-teal-900/40 mix-blend-multiply"></div>
+          {/* Subtle green tint overlay */}
+          <div className="absolute inset-0 bg-gradient-to-br from-emerald-900/20 via-green-950/25 to-teal-900/20"></div>
 
-          {/* Dark vignette overlay - focus on center */}
-          <div className="absolute inset-0 bg-gradient-radial from-transparent via-black/10 to-black/40"></div>
-
-          {/* Top-to-bottom gradient - text protection */}
-          <div className="absolute inset-0 bg-gradient-to-b from-black/30 via-transparent to-black/40"></div>
+          {/* Edge vignette - keeps edges darker */}
+          <div className="absolute inset-0 bg-gradient-radial from-transparent via-transparent to-black/50"></div>
         </div>
       )}
 
@@ -617,9 +613,9 @@ export default function Home() {
       {/* Main Container */}
       <main className="max-w-full mx-auto px-4 py-8 flex gap-4 relative z-10 h-[calc(100vh-140px)]">
         {/* Chat Container */}
-        <div className={`bg-gradient-to-br from-gray-900/90 via-green-950/90 to-gray-900/90 backdrop-blur-lg rounded-3xl shadow-2xl border-2 border-green-500/30 overflow-hidden transition-all flex flex-col ${
+        <div className={`bg-gradient-to-br from-gray-900/40 via-green-950/50 to-gray-900/40 backdrop-blur-xl rounded-3xl shadow-2xl border-2 border-green-400/40 overflow-hidden transition-all flex flex-col ${
           currentImage || imageLoading ? 'w-1/2' : 'w-full max-w-6xl mx-auto'
-        }`}>
+        }`} style={{ backdropFilter: 'blur(20px) saturate(180%)' }}>
           {/* Messages */}
           <div className="flex-1 overflow-y-auto p-6 space-y-4 bg-gradient-to-b from-black/20 to-transparent relative">
             {messages.length === 0 && (
@@ -631,17 +627,18 @@ export default function Home() {
                 <p className="text-xl mb-6 text-green-300/90">
                   {t.welcomeSubtitle}
                 </p>
-                <div className="mt-8 space-y-3">
-                  <p className="text-sm font-semibold text-green-400 mb-4">🎯 {t.tryThese}</p>
-                  <div className="flex flex-col gap-3 max-w-2xl mx-auto">
+                <div className="mt-8">
+                  <p className="text-sm font-semibold text-green-400 mb-6 tracking-wide">✨ {t.tryThese}</p>
+                  <div className="flex gap-4 max-w-5xl mx-auto justify-center">
                     <button
                       onClick={() => sendMessage(t.example1.replace(/"/g, ''))}
                       disabled={!isConnected}
-                      className="bg-gradient-to-r from-green-900/60 to-emerald-900/60 hover:from-green-800/70 hover:to-emerald-800/70 border border-green-500/30 rounded-xl p-4 transition-all hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed group"
+                      className="bg-gradient-to-br from-green-900/30 to-emerald-900/30 hover:from-green-800/50 hover:to-emerald-800/50 backdrop-blur-md border border-green-400/30 hover:border-green-300/60 rounded-2xl px-6 py-5 transition-all duration-300 hover:scale-105 hover:-translate-y-1 hover:shadow-lg hover:shadow-green-500/30 disabled:opacity-50 disabled:cursor-not-allowed group flex-1 max-w-xs"
+                      style={{ backdropFilter: 'blur(12px)' }}
                     >
-                      <div className="flex items-center gap-3 text-left">
-                        <span className="text-2xl">💬</span>
-                        <span className="text-white font-medium group-hover:text-green-300 transition-colors">
+                      <div className="flex flex-col items-center gap-2 text-center">
+                        <span className="text-3xl group-hover:scale-110 transition-transform duration-300">💬</span>
+                        <span className="text-white font-medium text-sm group-hover:text-green-300 transition-colors">
                           {t.example1.replace(/"/g, '')}
                         </span>
                       </div>
@@ -649,11 +646,12 @@ export default function Home() {
                     <button
                       onClick={() => sendMessage(t.example2.replace(/"/g, ''))}
                       disabled={!isConnected}
-                      className="bg-gradient-to-r from-green-900/60 to-emerald-900/60 hover:from-green-800/70 hover:to-emerald-800/70 border border-green-500/30 rounded-xl p-4 transition-all hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed group"
+                      className="bg-gradient-to-br from-green-900/30 to-emerald-900/30 hover:from-green-800/50 hover:to-emerald-800/50 backdrop-blur-md border border-green-400/30 hover:border-green-300/60 rounded-2xl px-6 py-5 transition-all duration-300 hover:scale-105 hover:-translate-y-1 hover:shadow-lg hover:shadow-green-500/30 disabled:opacity-50 disabled:cursor-not-allowed group flex-1 max-w-xs"
+                      style={{ backdropFilter: 'blur(12px)' }}
                     >
-                      <div className="flex items-center gap-3 text-left">
-                        <span className="text-2xl">📊</span>
-                        <span className="text-white font-medium group-hover:text-green-300 transition-colors">
+                      <div className="flex flex-col items-center gap-2 text-center">
+                        <span className="text-3xl group-hover:scale-110 transition-transform duration-300">📊</span>
+                        <span className="text-white font-medium text-sm group-hover:text-green-300 transition-colors">
                           {t.example2.replace(/"/g, '')}
                         </span>
                       </div>
@@ -661,11 +659,12 @@ export default function Home() {
                     <button
                       onClick={() => sendMessage(t.example3.replace(/"/g, ''))}
                       disabled={!isConnected}
-                      className="bg-gradient-to-r from-green-900/60 to-emerald-900/60 hover:from-green-800/70 hover:to-emerald-800/70 border border-green-500/30 rounded-xl p-4 transition-all hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed group"
+                      className="bg-gradient-to-br from-green-900/30 to-emerald-900/30 hover:from-green-800/50 hover:to-emerald-800/50 backdrop-blur-md border border-green-400/30 hover:border-green-300/60 rounded-2xl px-6 py-5 transition-all duration-300 hover:scale-105 hover:-translate-y-1 hover:shadow-lg hover:shadow-green-500/30 disabled:opacity-50 disabled:cursor-not-allowed group flex-1 max-w-xs"
+                      style={{ backdropFilter: 'blur(12px)' }}
                     >
-                      <div className="flex items-center gap-3 text-left">
-                        <span className="text-2xl">🔍</span>
-                        <span className="text-white font-medium group-hover:text-green-300 transition-colors">
+                      <div className="flex flex-col items-center gap-2 text-center">
+                        <span className="text-3xl group-hover:scale-110 transition-transform duration-300">🔍</span>
+                        <span className="text-white font-medium text-sm group-hover:text-green-300 transition-colors">
                           {t.example3.replace(/"/g, '')}
                         </span>
                       </div>
@@ -762,7 +761,7 @@ export default function Home() {
 
         {/* Image Viewer Panel */}
         {(currentImage || imageLoading) && (
-          <div className="w-1/2 bg-gradient-to-br from-gray-900/90 via-green-950/90 to-gray-900/90 backdrop-blur-lg rounded-3xl shadow-2xl border-2 border-green-500/30 p-6 flex flex-col">
+          <div className="w-1/2 bg-gradient-to-br from-gray-900/40 via-green-950/50 to-gray-900/40 backdrop-blur-xl rounded-3xl shadow-2xl border-2 border-green-400/40 p-6 flex flex-col" style={{ backdropFilter: 'blur(20px) saturate(180%)' }}>
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-xl font-bold bg-gradient-to-r from-green-400 to-emerald-300 bg-clip-text text-transparent">📊 {t.matchAnalytics}</h2>
               <button
