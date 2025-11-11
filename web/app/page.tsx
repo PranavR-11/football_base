@@ -220,12 +220,12 @@ export default function Home() {
         className="absolute inset-0 bg-cover bg-center bg-no-repeat"
         style={{
           backgroundImage: 'url(https://images.unsplash.com/photo-1522778119026-d647f0596c20?q=80&w=2070&auto=format&fit=crop)',
-          filter: 'brightness(0.3) saturate(0.8)'
+          filter: 'brightness(0.5) saturate(0.9)'
         }}
       ></div>
 
       {/* Green gradient overlay to maintain theme */}
-      <div className="absolute inset-0 bg-gradient-to-br from-emerald-950/90 via-green-900/85 to-teal-950/90"></div>
+      <div className="absolute inset-0 bg-gradient-to-br from-emerald-950/70 via-green-900/65 to-teal-950/70"></div>
 
       {/* Football pitch pattern overlay */}
       <div className="absolute inset-0 opacity-10" style={{
