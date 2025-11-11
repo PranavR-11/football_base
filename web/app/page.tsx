@@ -315,19 +315,32 @@ export default function Home() {
 
   const t = translations[language]
 
-  // Set random start time when component mounts
+  // Set random start time when component mounts and handle video loading
   useEffect(() => {
-    // Random start between 0 and 30 seconds (adjust based on your video length)
-    const randomStart = Math.random() * 30
-    setVideoStartTime(randomStart)
-  }, [])
+    const video = videoRef.current
+    if (!video) return
 
-  // Set video to random start time when it loads
-  useEffect(() => {
-    if (videoRef.current) {
-      videoRef.current.currentTime = videoStartTime
+    const handleLoadedMetadata = () => {
+      // Random start between 0 and video duration (or 60 seconds max)
+      const maxStart = Math.min(video.duration - 5, 60) // Leave 5 seconds at end
+      const randomStart = Math.random() * maxStart
+      video.currentTime = randomStart
+      console.log(`Video starting at random time: ${randomStart.toFixed(2)}s`)
     }
-  }, [videoStartTime])
+
+    // Set random time when video metadata is loaded
+    if (video.readyState >= 1) {
+      // Metadata already loaded
+      handleLoadedMetadata()
+    } else {
+      // Wait for metadata to load
+      video.addEventListener('loadedmetadata', handleLoadedMetadata)
+    }
+
+    return () => {
+      video.removeEventListener('loadedmetadata', handleLoadedMetadata)
+    }
+  }, [])
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
