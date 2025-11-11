@@ -506,7 +506,7 @@ export default function Home() {
     <div className="min-h-screen relative overflow-hidden">
       {/* Full-Screen Background Video - Only on welcome screen */}
       {messages.length === 0 && (
-        <div className="absolute inset-0 z-0">
+        <div className="absolute inset-0" style={{ zIndex: 0 }}>
           <video
             ref={videoRef}
             autoPlay
@@ -518,7 +518,7 @@ export default function Home() {
               filter: 'brightness(0.4) saturate(0.8) blur(1px)',
             }}
           >
-            <source src="/videos/1111.mp4" type="video/mp4" />
+            <source src="/videos/1111-2.mp4" type="video/mp4" />
           </video>
 
           {/* Multi-layered overlays for professional blend */}
@@ -545,10 +545,11 @@ export default function Home() {
       )}
 
       {/* Green gradient overlay - always present */}
-      <div className="absolute inset-0 bg-gradient-to-br from-emerald-950/70 via-green-900/65 to-teal-950/70 z-1"></div>
+      <div className="absolute inset-0 bg-gradient-to-br from-emerald-950/70 via-green-900/65 to-teal-950/70" style={{ zIndex: 1 }}></div>
 
       {/* Football pitch pattern overlay */}
-      <div className="absolute inset-0 opacity-10 z-2" style={{
+      <div className="absolute inset-0 opacity-10" style={{
+        zIndex: 2,
         backgroundImage: `
           linear-gradient(0deg, transparent 24%, rgba(255, 255, 255, .05) 25%, rgba(255, 255, 255, .05) 26%, transparent 27%, transparent 74%, rgba(255, 255, 255, .05) 75%, rgba(255, 255, 255, .05) 76%, transparent 77%, transparent),
           linear-gradient(90deg, transparent 24%, rgba(255, 255, 255, .05) 25%, rgba(255, 255, 255, .05) 26%, transparent 27%, transparent 74%, rgba(255, 255, 255, .05) 75%, rgba(255, 255, 255, .05) 76%, transparent 77%, transparent)
