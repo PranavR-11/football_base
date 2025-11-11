@@ -250,13 +250,13 @@ export default function Home() {
       </header>
 
       {/* Main Container */}
-      <main className="max-w-full mx-auto px-4 py-8 flex gap-4 relative z-10">
+      <main className="max-w-full mx-auto px-4 py-8 flex gap-4 relative z-10 h-[calc(100vh-140px)]">
         {/* Chat Container */}
-        <div className={`bg-gradient-to-br from-gray-900/90 via-green-950/90 to-gray-900/90 backdrop-blur-lg rounded-3xl shadow-2xl border-2 border-green-500/30 overflow-hidden transition-all ${
+        <div className={`bg-gradient-to-br from-gray-900/90 via-green-950/90 to-gray-900/90 backdrop-blur-lg rounded-3xl shadow-2xl border-2 border-green-500/30 overflow-hidden transition-all flex flex-col ${
           currentImage || imageLoading ? 'w-1/2' : 'w-full max-w-6xl mx-auto'
         }`}>
           {/* Messages */}
-          <div className="h-[600px] overflow-y-auto p-6 space-y-4 bg-gradient-to-b from-black/20 to-transparent">
+          <div className="flex-1 overflow-y-auto p-6 space-y-4 bg-gradient-to-b from-black/20 to-transparent">
             {messages.length === 0 && (
               <div className="text-center text-white/70 mt-32">
                 <div className="text-6xl mb-6 animate-bounce">⚽</div>
@@ -339,7 +339,7 @@ export default function Home() {
           </div>
 
           {/* Input */}
-          <div className="border-t-2 border-green-500/30 p-6 bg-gradient-to-r from-black/40 via-green-950/40 to-black/40 backdrop-blur-md">
+          <div className="flex-shrink-0 border-t-2 border-green-500/30 p-6 bg-gradient-to-r from-black/40 via-green-950/40 to-black/40 backdrop-blur-md">
             <div className="flex gap-4">
               <input
                 type="text"
