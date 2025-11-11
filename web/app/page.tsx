@@ -518,8 +518,7 @@ export default function Home() {
               filter: 'brightness(0.4) saturate(0.8) blur(1px)',
             }}
           >
-            <source src="/videos/1111.mov" type="video/mp4" />
-            <source src="/videos/1111.mov" type="video/quicktime" />
+            <source src="/videos/1111.mp4" type="video/mp4" />
           </video>
 
           {/* Multi-layered overlays for professional blend */}
