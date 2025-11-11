@@ -504,54 +504,31 @@ export default function Home() {
 
   return (
     <div className="min-h-screen relative overflow-hidden">
-      {/* Full-Screen Background Video - Only on welcome screen */}
-      {messages.length === 0 && (
-        <div className="absolute inset-0" style={{ zIndex: 0 }}>
-          <video
-            ref={videoRef}
-            autoPlay
-            loop
-            muted
-            playsInline
-            className="absolute inset-0 w-full h-full object-cover"
-            style={{
-              filter: 'brightness(0.8) saturate(1.0)',
-            }}
-          >
-            <source src="/videos/1111-2.mp4" type="video/mp4" />
-          </video>
-
-          {/* Subtle green tint overlay */}
-          <div className="absolute inset-0 bg-gradient-to-br from-emerald-900/20 via-green-950/25 to-teal-900/20"></div>
-
-          {/* Edge vignette - keeps edges darker */}
-          <div className="absolute inset-0 bg-gradient-radial from-transparent via-transparent to-black/50"></div>
-        </div>
-      )}
-
-      {/* Stadium Background Image - Fallback when chat starts */}
-      {messages.length > 0 && (
-        <div
-          className="absolute inset-0 bg-cover bg-center bg-no-repeat"
+      {/* Full-Screen Background Video - Always playing */}
+      <div className="absolute inset-0" style={{ zIndex: 0 }}>
+        <video
+          ref={videoRef}
+          autoPlay
+          loop
+          muted
+          playsInline
+          className="absolute inset-0 w-full h-full object-cover"
           style={{
-            backgroundImage: 'url(https://images.unsplash.com/photo-1522778119026-d647f0596c20?q=80&w=2070&auto=format&fit=crop)',
-            filter: 'brightness(0.5) saturate(0.9)'
+            filter: 'brightness(0.8) saturate(1.0)',
           }}
-        ></div>
-      )}
+        >
+          <source src="/videos/1111-2.mp4" type="video/mp4" />
+        </video>
 
-      {/* Green gradient overlay - always present */}
-      <div className="absolute inset-0 bg-gradient-to-br from-emerald-950/70 via-green-900/65 to-teal-950/70" style={{ zIndex: 1 }}></div>
+        {/* Subtle green tint overlay */}
+        <div className="absolute inset-0 bg-gradient-to-br from-emerald-900/20 via-green-950/25 to-teal-900/20"></div>
 
-      {/* Football pitch pattern overlay */}
-      <div className="absolute inset-0 opacity-10" style={{
-        zIndex: 2,
-        backgroundImage: `
-          linear-gradient(0deg, transparent 24%, rgba(255, 255, 255, .05) 25%, rgba(255, 255, 255, .05) 26%, transparent 27%, transparent 74%, rgba(255, 255, 255, .05) 75%, rgba(255, 255, 255, .05) 76%, transparent 77%, transparent),
-          linear-gradient(90deg, transparent 24%, rgba(255, 255, 255, .05) 25%, rgba(255, 255, 255, .05) 26%, transparent 27%, transparent 74%, rgba(255, 255, 255, .05) 75%, rgba(255, 255, 255, .05) 76%, transparent 77%, transparent)
-        `,
-        backgroundSize: '50px 50px'
-      }}></div>
+        {/* Edge vignette - keeps edges darker */}
+        <div className="absolute inset-0 bg-gradient-radial from-transparent via-transparent to-black/50"></div>
+      </div>
+
+      {/* Light green gradient overlay */}
+      <div className="absolute inset-0 bg-gradient-to-br from-emerald-950/30 via-green-900/25 to-teal-950/30" style={{ zIndex: 1 }}></div>
 
       <style jsx>{`
         @keyframes fadeIn {
@@ -613,8 +590,12 @@ export default function Home() {
       {/* Main Container */}
       <main className="max-w-full mx-auto px-4 py-8 flex gap-4 relative z-10 h-[calc(100vh-140px)]">
         {/* Chat Container */}
-        <div className={`bg-gradient-to-br from-gray-900/40 via-green-950/50 to-gray-900/40 backdrop-blur-xl rounded-3xl shadow-2xl border-2 border-green-400/40 overflow-hidden transition-all flex flex-col ${
-          currentImage || imageLoading ? 'w-1/2' : 'w-full max-w-6xl mx-auto'
+        <div className={`bg-gradient-to-br from-gray-900/40 via-green-950/50 to-gray-900/40 backdrop-blur-xl rounded-3xl shadow-2xl border-2 border-green-400/40 overflow-hidden transition-all duration-500 flex flex-col ${
+          currentImage || imageLoading
+            ? 'w-1/2'
+            : messages.length === 0
+              ? 'w-full max-w-3xl mx-auto'
+              : 'w-full max-w-5xl mx-auto'
         }`} style={{ backdropFilter: 'blur(20px) saturate(180%)' }}>
           {/* Messages */}
           <div className="flex-1 overflow-y-auto p-6 space-y-4 bg-gradient-to-b from-black/20 to-transparent relative">
