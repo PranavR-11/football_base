@@ -1,0 +1,18 @@
+[Unit]
+Description=Cloudflare DNS Updater for Football Analytics
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=deployer
+Group=deployer
+WorkingDirectory=/home/deployer/football_base/deploy/ionos
+EnvironmentFile=/home/deployer/football_base/deploy/ionos/.env.dns
+ExecStart=/home/deployer/football_base/deploy/ionos/update_dns.sh
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=dns-updater
+
+[Install]
+WantedBy=multi-user.target

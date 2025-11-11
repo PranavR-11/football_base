@@ -1,0 +1,16 @@
+fastapi
+uvicorn[standard]
+pydantic
+langchain
+openai
+faiss-cpu
+pandas
+numpy
+scikit-learn
+matplotlib
+python-dotenv
+tenacity
+joblib
+streamlit
+tqdm
+requests
