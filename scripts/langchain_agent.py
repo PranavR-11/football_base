@@ -627,6 +627,11 @@ class OpenAIAdapter:
         self.model = model
 
     def predict(self, prompt: str, max_tokens: int = 512, temperature: float = OPENAI_TEMPERATURE) -> str:
+        # Add language instruction if detected language is set in CONTEXT
+        detected_lang = CONTEXT.get("detected_language")
+        if detected_lang and detected_lang not in ["en", "English"]:
+            prompt = prompt + f"\n\nIMPORTANT: Respond in {detected_lang} language."
+
         resp = self.client.chat.completions.create(
             model=self.model,
             messages=[{"role":"user","content": prompt}],
@@ -648,6 +653,56 @@ class OpenAIAdapter:
 
 llm = OpenAIAdapter(api_key=OPENAI_API_KEY, model=OPENAI_CHAT_MODEL)
 dbg("Using OpenAIAdapter (direct OpenAI client).")
+
+# ---------------- Language Detection ----------------
+def detect_language(text: str) -> str:
+    """
+    Detect the language of the input text using LLM.
+    Returns language name (e.g., 'English', 'Spanish', 'French', etc.) or 'English' as default.
+    """
+    if not text or len(text.strip()) < 3:
+        return "English"
+
+    # Quick heuristic check for common non-English patterns
+    # Spanish
+    if any(word in text.lower() for word in ["quién es", "cuál", "dónde", "cuándo", "cómo", "qué", "comparar", "jugador", "goles"]):
+        return "Spanish"
+    # French
+    if any(word in text.lower() for word in ["qui est", "quel", "où", "quand", "comment", "comparer", "joueur", "buts"]):
+        return "French"
+    # German
+    if any(word in text.lower() for word in ["wer ist", "welche", "wo", "wann", "wie", "vergleichen", "spieler", "tore"]):
+        return "German"
+    # Italian
+    if any(word in text.lower() for word in ["chi è", "quale", "dove", "quando", "come", "confrontare", "giocatore", "gol"]):
+        return "Italian"
+    # Portuguese
+    if any(word in text.lower() for word in ["quem é", "qual", "onde", "quando", "como", "comparar", "jogador", "gols"]):
+        return "Portuguese"
+
+    # Use LLM for more accurate detection
+    prompt = f"""Detect the language of this text and respond with ONLY the language name (e.g., English, Spanish, French, German, Italian, Portuguese, Dutch, etc.):
+
+Text: "{text}"
+
+Language:"""
+
+    try:
+        # Temporarily clear detected_language to avoid recursion
+        current_lang = CONTEXT.get("detected_language")
+        CONTEXT["detected_language"] = None
+
+        lang = llm.predict(prompt, max_tokens=10, temperature=0.0).strip()
+
+        # Restore previous language
+        if current_lang:
+            CONTEXT["detected_language"] = current_lang
+
+        dbg("Detected language: %s", lang)
+        return lang if lang else "English"
+    except Exception as e:
+        dbg("Language detection failed: %s", e)
+        return "English"
 
 # ---------------- Intent stuff & prompts ----------------
 COMMON_PLOT_METRICS = ["goals_per_90", "xg_per_90", "npxg_per_90", "assists_per_90", "shots_per_90"]
@@ -917,8 +972,8 @@ CONTEXT = {
     "last_intent": None,
     "last_hits": None,
     "history": [],
-    "pending_disambig": None
-
+    "pending_disambig": None,
+    "detected_language": "English"
 }
 MAX_HISTORY = int(os.getenv("MAX_HISTORY", "12"))
 
@@ -2820,6 +2875,11 @@ def handle_input(text: str):
     if text.lower() in ("exit", "quit"):
         print("Goodbye.")
         sys.exit(0)
+
+    # Detect language for this query and store in CONTEXT
+    detected_lang = detect_language(text)
+    CONTEXT["detected_language"] = detected_lang
+    dbg("Language detected for this query: %s", detected_lang)
 
     # Flag to track if we resolved disambiguation (skip re-parsing if true)
     resolved_disambiguation = False

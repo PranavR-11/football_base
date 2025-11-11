@@ -44,7 +44,8 @@ class ConnectionManager:
             "last_intent": None,
             "last_hits": None,
             "history": [],
-            "pending_disambig": None
+            "pending_disambig": None,
+            "detected_language": "English"
         }
 
     def disconnect(self, websocket: WebSocket):
@@ -63,7 +64,8 @@ class ConnectionManager:
             "last_intent": None,
             "last_hits": None,
             "history": [],
-            "pending_disambig": None
+            "pending_disambig": None,
+            "detected_language": "English"
         })
 
 manager = ConnectionManager()
