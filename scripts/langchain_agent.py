@@ -1204,14 +1204,9 @@ def present_disambiguation_options(options: List[Dict[str, Any]], original_text:
         print("I found multiple possible players that match. Which one do you mean? Reply with the option number or type the full name.")
         for i, opt in enumerate(options, start=1):
             name = opt.get("player") or opt.get("title") or str(opt.get("candidate") or "")
-            score = opt.get("score")
             snippet = opt.get("snippet") or ""
             line = f"{i}. {name}"
-            if score is not None:
-                try:
-                    line += f"  (confidence {float(score):.2f})"
-                except Exception:
-                    pass
+            # Don't show confidence scores to users
             if snippet:
                 line += f" — {snippet[:120]}"
             print(line)
@@ -2817,7 +2812,7 @@ def handle_input(text: str):
             # User made a valid selection - clear disambiguation and update the original intent
             CONTEXT.pop('pending_disambig', None)
             dbg("User selected disambiguation choice: %s", chosen)
-            print(f"Selected: {chosen}. Proceeding with your original request...")
+            # Silently proceed - no need to announce selection
 
             # Update the original intent struct with the chosen player
             orig_intent = pd.get("original_intent_struct", {})
@@ -3875,7 +3870,7 @@ IMPORTANT: Use plain text only. Do NOT use markdown formatting like ** for bold 
                 else:
                     rag_ctx, hits = build_context_from_rag(text, k=6)
                     ans = answer_with_context(text, rag_ctx, hits)
-                    print("\nLLM answer:\n", ans)
+                    print(ans)
                     return
 
             if chart_type == "group_bar":
@@ -3921,7 +3916,7 @@ IMPORTANT: Use plain text only. Do NOT use markdown formatting like ** for bold 
                 else:
                     rag_ctx, hits = build_context_from_rag(text, k=6)
                     fb = llm_fallback_answer(text, rag_ctx, hits)
-                    print("\nLLM fallback:\n", fb)
+                    print(fb)
                     return
 
     # If no players but metrics present -> attempt to use last player from context
@@ -3950,13 +3945,8 @@ IMPORTANT: Use plain text only. Do NOT use markdown formatting like ** for bold 
     # The LLM will use RAG data when available, and general knowledge otherwise
     rag_ctx, hits = build_context_from_rag(text, k=6)
     ans = answer_with_context(text, rag_ctx, hits)
-    print("\n", ans)
-    print()
-    return
-
-    print("\nLLM answer:\n")
     print(ans)
-    print()
+    return
 
 # ---------------- REPL ----------------
 if __name__ == "__main__":
