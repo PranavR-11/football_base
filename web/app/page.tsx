@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { Send, Loader2, ZoomIn, ZoomOut, Maximize2, X, Minimize2, Download } from 'lucide-react'
+import { Send, Loader2, ZoomIn, ZoomOut, Maximize2, X, Minimize2, Download, Globe } from 'lucide-react'
 
 type Message = {
   id: string
@@ -9,6 +9,276 @@ type Message = {
   content: string
   imageData?: string
   timestamp: Date
+}
+
+type Language = 'en' | 'es' | 'fr' | 'ar' | 'pt' | 'ru' | 'ja' | 'de' | 'hi' | 'zh'
+
+const translations: Record<Language, {
+  title: string
+  subtitle: string
+  connected: string
+  disconnected: string
+  welcome: string
+  welcomeSubtitle: string
+  tryThese: string
+  example1: string
+  example2: string
+  example3: string
+  placeholder: string
+  send: string
+  analyzing: string
+  matchAnalytics: string
+  zoomOut: string
+  zoomIn: string
+  fullscreen: string
+  exit: string
+  download: string
+  analyzingData: string
+  crunchingNumbers: string
+}> = {
+  en: {
+    title: "Football Analytics AI",
+    subtitle: "Powered by Advanced Stats",
+    connected: "LIVE",
+    disconnected: "DISCONNECTED",
+    welcome: "Welcome to the Pitch!",
+    welcomeSubtitle: "Your AI-Powered Football Intelligence Hub",
+    tryThese: "Try These:",
+    example1: '"Compare Haaland and Mbappe"',
+    example2: '"Top 5 goal scorers in 2023"',
+    example3: '"Who is Pedri?"',
+    placeholder: "Ask about players, stats, comparisons...",
+    send: "Send",
+    analyzing: "Analyzing...",
+    matchAnalytics: "Match Analytics",
+    zoomOut: "Zoom Out",
+    zoomIn: "Zoom In",
+    fullscreen: "Fullscreen",
+    exit: "Exit",
+    download: "Download",
+    analyzingData: "Analyzing the match data...",
+    crunchingNumbers: "Crunching the numbers"
+  },
+  es: {
+    title: "IA de Análisis de Fútbol",
+    subtitle: "Impulsado por Estadísticas Avanzadas",
+    connected: "EN VIVO",
+    disconnected: "DESCONECTADO",
+    welcome: "¡Bienvenido al Campo!",
+    welcomeSubtitle: "Tu Centro de Inteligencia de Fútbol con IA",
+    tryThese: "Prueba Estos:",
+    example1: '"Compara Haaland y Mbappé"',
+    example2: '"Top 5 goleadores en 2023"',
+    example3: '"¿Quién es Pedri?"',
+    placeholder: "Pregunta sobre jugadores, estadísticas, comparaciones...",
+    send: "Enviar",
+    analyzing: "Analizando...",
+    matchAnalytics: "Análisis del Partido",
+    zoomOut: "Alejar",
+    zoomIn: "Acercar",
+    fullscreen: "Pantalla Completa",
+    exit: "Salir",
+    download: "Descargar",
+    analyzingData: "Analizando los datos del partido...",
+    crunchingNumbers: "Procesando los números"
+  },
+  fr: {
+    title: "IA d'Analyse de Football",
+    subtitle: "Propulsé par des Statistiques Avancées",
+    connected: "EN DIRECT",
+    disconnected: "DÉCONNECTÉ",
+    welcome: "Bienvenue sur le Terrain!",
+    welcomeSubtitle: "Votre Hub d'Intelligence Football avec IA",
+    tryThese: "Essayez Ceci:",
+    example1: '"Comparez Haaland et Mbappé"',
+    example2: '"Top 5 buteurs en 2023"',
+    example3: '"Qui est Pedri?"',
+    placeholder: "Demandez sur les joueurs, stats, comparaisons...",
+    send: "Envoyer",
+    analyzing: "Analyse...",
+    matchAnalytics: "Analyse du Match",
+    zoomOut: "Dézoomer",
+    zoomIn: "Zoomer",
+    fullscreen: "Plein Écran",
+    exit: "Quitter",
+    download: "Télécharger",
+    analyzingData: "Analyse des données du match...",
+    crunchingNumbers: "Traitement des chiffres"
+  },
+  ar: {
+    title: "الذكاء الاصطناعي لتحليل كرة القدم",
+    subtitle: "مدعوم بإحصائيات متقدمة",
+    connected: "مباشر",
+    disconnected: "غير متصل",
+    welcome: "!مرحباً بك في الملعب",
+    welcomeSubtitle: "مركز معلومات كرة القدم المدعوم بالذكاء الاصطناعي",
+    tryThese: ":جرب هذه",
+    example1: '"قارن هالاند ومبابي"',
+    example2: '"أفضل 5 هدافين في 2023"',
+    example3: '"من هو بيدري؟"',
+    placeholder: "...اسأل عن اللاعبين، الإحصائيات، المقارنات",
+    send: "إرسال",
+    analyzing: "...جاري التحليل",
+    matchAnalytics: "تحليل المباراة",
+    zoomOut: "تصغير",
+    zoomIn: "تكبير",
+    fullscreen: "ملء الشاشة",
+    exit: "خروج",
+    download: "تحميل",
+    analyzingData: "...تحليل بيانات المباراة",
+    crunchingNumbers: "معالجة الأرقام"
+  },
+  pt: {
+    title: "IA de Análise de Futebol",
+    subtitle: "Alimentado por Estatísticas Avançadas",
+    connected: "AO VIVO",
+    disconnected: "DESCONECTADO",
+    welcome: "Bem-vindo ao Campo!",
+    welcomeSubtitle: "Seu Hub de Inteligência de Futebol com IA",
+    tryThese: "Experimente:",
+    example1: '"Compare Haaland e Mbappé"',
+    example2: '"Top 5 artilheiros em 2023"',
+    example3: '"Quem é Pedri?"',
+    placeholder: "Pergunte sobre jogadores, estatísticas, comparações...",
+    send: "Enviar",
+    analyzing: "Analisando...",
+    matchAnalytics: "Análise da Partida",
+    zoomOut: "Diminuir Zoom",
+    zoomIn: "Aumentar Zoom",
+    fullscreen: "Tela Cheia",
+    exit: "Sair",
+    download: "Baixar",
+    analyzingData: "Analisando os dados da partida...",
+    crunchingNumbers: "Processando os números"
+  },
+  ru: {
+    title: "ИИ для Анализа Футбола",
+    subtitle: "На основе продвинутой статистики",
+    connected: "В ЭФИРЕ",
+    disconnected: "ОТКЛЮЧЕНО",
+    welcome: "Добро пожаловать на поле!",
+    welcomeSubtitle: "Ваш футбольный центр на базе ИИ",
+    tryThese: "Попробуйте:",
+    example1: '"Сравните Холанда и Мбаппе"',
+    example2: '"Топ-5 бомбардиров 2023"',
+    example3: '"Кто такой Педри?"',
+    placeholder: "Спросите об игроках, статистике, сравнениях...",
+    send: "Отправить",
+    analyzing: "Анализ...",
+    matchAnalytics: "Анализ Матча",
+    zoomOut: "Уменьшить",
+    zoomIn: "Увеличить",
+    fullscreen: "Полный Экран",
+    exit: "Выход",
+    download: "Скачать",
+    analyzingData: "Анализ данных матча...",
+    crunchingNumbers: "Обработка чисел"
+  },
+  ja: {
+    title: "サッカー分析AI",
+    subtitle: "高度な統計により駆動",
+    connected: "ライブ",
+    disconnected: "切断",
+    welcome: "ピッチへようこそ！",
+    welcomeSubtitle: "AIを活用したサッカーインテリジェンスハブ",
+    tryThese: "試してみてください：",
+    example1: '"ハーランドとムバッペを比較"',
+    example2: '"2023年のトップ5得点者"',
+    example3: '"ペドリとは誰ですか？"',
+    placeholder: "選手、統計、比較について質問...",
+    send: "送信",
+    analyzing: "分析中...",
+    matchAnalytics: "試合分析",
+    zoomOut: "ズームアウト",
+    zoomIn: "ズームイン",
+    fullscreen: "全画面表示",
+    exit: "終了",
+    download: "ダウンロード",
+    analyzingData: "試合データを分析中...",
+    crunchingNumbers: "数字を処理中"
+  },
+  de: {
+    title: "Fußball-Analyse KI",
+    subtitle: "Angetrieben von erweiterten Statistiken",
+    connected: "LIVE",
+    disconnected: "GETRENNT",
+    welcome: "Willkommen auf dem Platz!",
+    welcomeSubtitle: "Ihr KI-gestütztes Fußball-Intelligence-Hub",
+    tryThese: "Versuchen Sie:",
+    example1: '"Vergleichen Sie Haaland und Mbappé"',
+    example2: '"Top 5 Torschützen 2023"',
+    example3: '"Wer ist Pedri?"',
+    placeholder: "Fragen Sie nach Spielern, Statistiken, Vergleichen...",
+    send: "Senden",
+    analyzing: "Analysieren...",
+    matchAnalytics: "Spielanalyse",
+    zoomOut: "Verkleinern",
+    zoomIn: "Vergrößern",
+    fullscreen: "Vollbild",
+    exit: "Beenden",
+    download: "Herunterladen",
+    analyzingData: "Spieldaten werden analysiert...",
+    crunchingNumbers: "Zahlen werden verarbeitet"
+  },
+  hi: {
+    title: "फुटबॉल विश्लेषण AI",
+    subtitle: "उन्नत आंकड़ों द्वारा संचालित",
+    connected: "लाइव",
+    disconnected: "डिस्कनेक्ट",
+    welcome: "मैदान में आपका स्वागत है!",
+    welcomeSubtitle: "आपका AI-संचालित फुटबॉल इंटेलिजेंस हब",
+    tryThese: "ये आज़माएं:",
+    example1: '"हालैंड और म्बाप्पे की तुलना करें"',
+    example2: '"2023 में शीर्ष 5 गोल स्कोरर"',
+    example3: '"पेड्री कौन है?"',
+    placeholder: "खिलाड़ियों, आंकड़ों, तुलनाओं के बारे में पूछें...",
+    send: "भेजें",
+    analyzing: "विश्लेषण...",
+    matchAnalytics: "मैच विश्लेषण",
+    zoomOut: "ज़ूम आउट",
+    zoomIn: "ज़ूम इन",
+    fullscreen: "पूर्ण स्क्रीन",
+    exit: "बाहर निकलें",
+    download: "डाउनलोड",
+    analyzingData: "मैच डेटा का विश्लेषण...",
+    crunchingNumbers: "संख्याओं को संसाधित करना"
+  },
+  zh: {
+    title: "足球分析人工智能",
+    subtitle: "由高级统计数据驱动",
+    connected: "直播",
+    disconnected: "已断开",
+    welcome: "欢迎来到球场！",
+    welcomeSubtitle: "您的AI驱动的足球智能中心",
+    tryThese: "试试这些：",
+    example1: '"比较哈兰德和姆巴佩"',
+    example2: '"2023年前5名射手"',
+    example3: '"佩德里是谁？"',
+    placeholder: "询问球员、统计数据、比较...",
+    send: "发送",
+    analyzing: "分析中...",
+    matchAnalytics: "比赛分析",
+    zoomOut: "缩小",
+    zoomIn: "放大",
+    fullscreen: "全屏",
+    exit: "退出",
+    download: "下载",
+    analyzingData: "分析比赛数据...",
+    crunchingNumbers: "处理数字中"
+  }
+}
+
+const languageNames: Record<Language, string> = {
+  en: 'English',
+  es: 'Español',
+  fr: 'Français',
+  ar: 'العربية',
+  pt: 'Português',
+  ru: 'Русский',
+  ja: '日本語',
+  de: 'Deutsch',
+  hi: 'हिन्दी',
+  zh: '中文'
 }
 
 export default function Home() {
@@ -20,11 +290,14 @@ export default function Home() {
   const [imageLoading, setImageLoading] = useState(false)
   const [imageZoom, setImageZoom] = useState(100)
   const [isFullscreen, setIsFullscreen] = useState(false)
+  const [language, setLanguage] = useState<Language>('en')
   const wsRef = useRef<WebSocket | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const currentMessageIdRef = useRef<string | null>(null)
   const accumulatedTextRef = useRef<string>('')
   const lastQueryRef = useRef<string>('')
+
+  const t = translations[language]
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -247,15 +520,33 @@ export default function Home() {
       {/* Header */}
       <header className="bg-gradient-to-r from-green-950/80 via-emerald-900/80 to-green-950/80 backdrop-blur-md border-b-2 border-yellow-500/30 shadow-2xl relative z-10">
         <div className="max-w-full mx-auto px-6 py-6">
-          <div className="flex items-center gap-4">
-            <div className="text-5xl">⚽</div>
-            <div>
-              <h1 className="text-4xl font-bold bg-gradient-to-r from-green-400 via-emerald-300 to-teal-400 bg-clip-text text-transparent flex items-center gap-3">
-                Football Analytics AI
-              </h1>
-              <p className="text-emerald-400 mt-1 text-sm font-semibold tracking-wide">
-                {isConnected ? '🟢 LIVE • Powered by Advanced Stats' : '🔴 DISCONNECTED'}
-              </p>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div className="text-5xl">⚽</div>
+              <div>
+                <h1 className="text-4xl font-bold bg-gradient-to-r from-green-400 via-emerald-300 to-teal-400 bg-clip-text text-transparent flex items-center gap-3">
+                  {t.title}
+                </h1>
+                <p className="text-emerald-400 mt-1 text-sm font-semibold tracking-wide">
+                  {isConnected ? `🟢 ${t.connected} • ${t.subtitle}` : `🔴 ${t.disconnected}`}
+                </p>
+              </div>
+            </div>
+
+            {/* Language Selector */}
+            <div className="relative">
+              <select
+                value={language}
+                onChange={(e) => setLanguage(e.target.value as Language)}
+                className="bg-green-900/50 border-2 border-green-500/30 rounded-lg px-4 py-2 text-white font-semibold cursor-pointer hover:bg-green-800/60 focus:outline-none focus:ring-2 focus:ring-green-500 transition-all appearance-none pr-10 backdrop-blur-sm"
+              >
+                {(Object.keys(languageNames) as Language[]).map((lang) => (
+                  <option key={lang} value={lang} className="bg-gray-900">
+                    {languageNames[lang]}
+                  </option>
+                ))}
+              </select>
+              <Globe className="absolute right-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-green-400 pointer-events-none" />
             </div>
           </div>
         </div>
@@ -273,17 +564,17 @@ export default function Home() {
               <div className="text-center text-white/70 mt-32">
                 <div className="text-6xl mb-6 animate-bounce">⚽</div>
                 <h2 className="text-3xl font-bold mb-4 bg-gradient-to-r from-green-400 to-emerald-300 bg-clip-text text-transparent">
-                  Welcome to the Pitch!
+                  {t.welcome}
                 </h2>
                 <p className="text-xl mb-6 text-green-300/90">
-                  Your AI-Powered Football Intelligence Hub
+                  {t.welcomeSubtitle}
                 </p>
                 <div className="mt-8 space-y-3 text-white/60">
                   <div className="bg-green-900/30 border border-green-500/30 rounded-xl p-4 max-w-md mx-auto">
-                    <p className="text-sm font-semibold text-green-400 mb-2">🎯 Try These:</p>
-                    <p className="text-sm">💬 &quot;Compare Haaland and Mbappe&quot;</p>
-                    <p className="text-sm">📊 &quot;Top 5 goal scorers in 2023&quot;</p>
-                    <p className="text-sm">🔍 &quot;Who is Pedri?&quot;</p>
+                    <p className="text-sm font-semibold text-green-400 mb-2">🎯 {t.tryThese}</p>
+                    <p className="text-sm">💬 {t.example1}</p>
+                    <p className="text-sm">📊 {t.example2}</p>
+                    <p className="text-sm">🔍 {t.example3}</p>
                   </div>
                 </div>
               </div>
@@ -342,7 +633,7 @@ export default function Home() {
               <div className="flex justify-start">
                 <div className="bg-gradient-to-br from-gray-800/90 to-green-900/60 backdrop-blur-sm px-6 py-4 rounded-2xl border border-green-500/20 flex items-center gap-3">
                   <Loader2 className="w-6 h-6 text-green-400 animate-spin" />
-                  <span className="text-green-300 text-sm font-semibold">Analyzing...</span>
+                  <span className="text-green-300 text-sm font-semibold">{t.analyzing}</span>
                 </div>
               </div>
             )}
@@ -358,7 +649,7 @@ export default function Home() {
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyPress={(e) => e.key === 'Enter' && sendMessage()}
-                placeholder="⚽ Ask about players, stats, comparisons..."
+                placeholder={`⚽ ${t.placeholder}`}
                 className="flex-1 bg-gray-900/80 border-2 border-green-500/30 rounded-xl px-6 py-4 text-white placeholder-green-400/40 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-400 backdrop-blur-sm transition-all"
                 disabled={!isConnected || isLoading}
               />
@@ -368,7 +659,7 @@ export default function Home() {
                 className="bg-gradient-to-r from-green-600 to-emerald-700 hover:from-green-500 hover:to-emerald-600 disabled:from-gray-600 disabled:to-gray-700 disabled:cursor-not-allowed text-white px-8 py-4 rounded-xl font-bold transition-all shadow-lg flex items-center gap-2 border border-green-400/30"
               >
                 <Send className="w-5 h-5" />
-                Send
+                {t.send}
               </button>
             </div>
           </div>
@@ -378,7 +669,7 @@ export default function Home() {
         {(currentImage || imageLoading) && (
           <div className="w-1/2 bg-gradient-to-br from-gray-900/90 via-green-950/90 to-gray-900/90 backdrop-blur-lg rounded-3xl shadow-2xl border-2 border-green-500/30 p-6 flex flex-col">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-bold bg-gradient-to-r from-green-400 to-emerald-300 bg-clip-text text-transparent">📊 Match Analytics</h2>
+              <h2 className="text-xl font-bold bg-gradient-to-r from-green-400 to-emerald-300 bg-clip-text text-transparent">📊 {t.matchAnalytics}</h2>
               <button
                 onClick={() => {
                   setCurrentImage(null)
@@ -396,8 +687,8 @@ export default function Home() {
                 <div className="text-center">
                   <div className="text-6xl mb-4 animate-bounce">⚽</div>
                   <Loader2 className="w-12 h-12 text-green-400 animate-spin mx-auto mb-4" />
-                  <p className="text-green-300 font-semibold">Analyzing the match data...</p>
-                  <p className="text-green-500/60 text-sm mt-2">Crunching the numbers 📊</p>
+                  <p className="text-green-300 font-semibold">{t.analyzingData}</p>
+                  <p className="text-green-500/60 text-sm mt-2">{t.crunchingNumbers} 📊</p>
                 </div>
               </div>
             )}
@@ -412,7 +703,7 @@ export default function Home() {
                     className="bg-green-900/50 hover:bg-green-800/60 disabled:opacity-50 disabled:cursor-not-allowed text-green-300 px-4 py-2 rounded-lg transition-colors flex items-center gap-2 border border-green-500/30"
                   >
                     <ZoomOut className="w-4 h-4" />
-                    Zoom Out
+                    {t.zoomOut}
                   </button>
                   <button
                     onClick={handleZoomIn}
@@ -420,21 +711,21 @@ export default function Home() {
                     className="bg-green-900/50 hover:bg-green-800/60 disabled:opacity-50 disabled:cursor-not-allowed text-green-300 px-4 py-2 rounded-lg transition-colors flex items-center gap-2 border border-green-500/30"
                   >
                     <ZoomIn className="w-4 h-4" />
-                    Zoom In
+                    {t.zoomIn}
                   </button>
                   <button
                     onClick={toggleFullscreen}
                     className="bg-green-900/50 hover:bg-green-800/60 text-green-300 px-4 py-2 rounded-lg transition-colors flex items-center gap-2 border border-green-500/30"
                   >
                     {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
-                    {isFullscreen ? 'Exit' : 'Fullscreen'}
+                    {isFullscreen ? t.exit : t.fullscreen}
                   </button>
                   <button
                     onClick={downloadImage}
                     className="bg-gradient-to-r from-green-700/60 to-emerald-700/60 hover:from-green-600/70 hover:to-emerald-600/70 text-white px-4 py-2 rounded-lg transition-colors flex items-center gap-2 border border-green-400/40 font-semibold"
                   >
                     <Download className="w-4 h-4" />
-                    Download
+                    {t.download}
                   </button>
                   <span className="bg-gradient-to-r from-green-900/60 to-emerald-900/60 text-green-300 font-bold px-4 py-2 rounded-lg ml-auto border border-green-500/30">
                     {imageZoom}%
