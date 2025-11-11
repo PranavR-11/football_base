@@ -291,7 +291,6 @@ export default function Home() {
   const [imageZoom, setImageZoom] = useState(100)
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [language, setLanguage] = useState<Language>('en')
-  const [currentVideoIndex, setCurrentVideoIndex] = useState(0)
   const wsRef = useRef<WebSocket | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const currentMessageIdRef = useRef<string | null>(null)
