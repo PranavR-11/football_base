@@ -291,6 +291,7 @@ export default function Home() {
   const [imageZoom, setImageZoom] = useState(100)
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [language, setLanguage] = useState<Language>('en')
+  const [currentVideoIndex, setCurrentVideoIndex] = useState(0)
   const wsRef = useRef<WebSocket | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const currentMessageIdRef = useRef<string | null>(null)
@@ -298,6 +299,23 @@ export default function Home() {
   const lastQueryRef = useRef<string>('')
 
   const t = translations[language]
+
+  // Video clips for background (add your video files to public/videos/ folder)
+  const videoClips = [
+    '/videos/player1.mp4',
+    '/videos/player2.mp4',
+    '/videos/player3.mp4',
+  ]
+
+  // Rotate videos every 5 seconds
+  useEffect(() => {
+    if (messages.length === 0 && videoClips.length > 1) {
+      const interval = setInterval(() => {
+        setCurrentVideoIndex((prev) => (prev + 1) % videoClips.length)
+      }, 5000)
+      return () => clearInterval(interval)
+    }
+  }, [messages.length, videoClips.length])
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -429,9 +447,9 @@ export default function Home() {
     }
   }, []) // Empty dependency array - run once on mount
 
-  const sendMessage = useCallback(() => {
+  const sendMessage = useCallback((customQuery?: string) => {
     const ws = wsRef.current
-    const query = input.trim()
+    const query = (customQuery || input).trim()
 
     if (!query || !ws || ws.readyState !== WebSocket.OPEN) {
       console.warn('Cannot send message:', {
@@ -559,9 +577,32 @@ export default function Home() {
           currentImage || imageLoading ? 'w-1/2' : 'w-full max-w-6xl mx-auto'
         }`}>
           {/* Messages */}
-          <div className="flex-1 overflow-y-auto p-6 space-y-4 bg-gradient-to-b from-black/20 to-transparent">
+          <div className="flex-1 overflow-y-auto p-6 space-y-4 bg-gradient-to-b from-black/20 to-transparent relative">
+            {/* Video Background - Only show when no messages */}
             {messages.length === 0 && (
-              <div className="text-center text-white/70 mt-32">
+              <div className="absolute inset-0 overflow-hidden">
+                {videoClips.map((video, index) => (
+                  <video
+                    key={video}
+                    autoPlay
+                    loop
+                    muted
+                    playsInline
+                    className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-1000 ${
+                      index === currentVideoIndex ? 'opacity-20' : 'opacity-0'
+                    }`}
+                    style={{ filter: 'brightness(0.5) blur(2px)' }}
+                  >
+                    <source src={video} type="video/mp4" />
+                  </video>
+                ))}
+                {/* Gradient overlay to ensure text readability */}
+                <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-transparent to-black/60"></div>
+              </div>
+            )}
+
+            {messages.length === 0 && (
+              <div className="text-center text-white/70 mt-32 relative z-10">
                 <div className="text-6xl mb-6 animate-bounce">⚽</div>
                 <h2 className="text-3xl font-bold mb-4 bg-gradient-to-r from-green-400 to-emerald-300 bg-clip-text text-transparent">
                   {t.welcome}
@@ -569,12 +610,45 @@ export default function Home() {
                 <p className="text-xl mb-6 text-green-300/90">
                   {t.welcomeSubtitle}
                 </p>
-                <div className="mt-8 space-y-3 text-white/60">
-                  <div className="bg-green-900/30 border border-green-500/30 rounded-xl p-4 max-w-md mx-auto">
-                    <p className="text-sm font-semibold text-green-400 mb-2">🎯 {t.tryThese}</p>
-                    <p className="text-sm">💬 {t.example1}</p>
-                    <p className="text-sm">📊 {t.example2}</p>
-                    <p className="text-sm">🔍 {t.example3}</p>
+                <div className="mt-8 space-y-3">
+                  <p className="text-sm font-semibold text-green-400 mb-4">🎯 {t.tryThese}</p>
+                  <div className="flex flex-col gap-3 max-w-2xl mx-auto">
+                    <button
+                      onClick={() => sendMessage(t.example1.replace(/"/g, ''))}
+                      disabled={!isConnected}
+                      className="bg-gradient-to-r from-green-900/60 to-emerald-900/60 hover:from-green-800/70 hover:to-emerald-800/70 border border-green-500/30 rounded-xl p-4 transition-all hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed group"
+                    >
+                      <div className="flex items-center gap-3 text-left">
+                        <span className="text-2xl">💬</span>
+                        <span className="text-white font-medium group-hover:text-green-300 transition-colors">
+                          {t.example1.replace(/"/g, '')}
+                        </span>
+                      </div>
+                    </button>
+                    <button
+                      onClick={() => sendMessage(t.example2.replace(/"/g, ''))}
+                      disabled={!isConnected}
+                      className="bg-gradient-to-r from-green-900/60 to-emerald-900/60 hover:from-green-800/70 hover:to-emerald-800/70 border border-green-500/30 rounded-xl p-4 transition-all hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed group"
+                    >
+                      <div className="flex items-center gap-3 text-left">
+                        <span className="text-2xl">📊</span>
+                        <span className="text-white font-medium group-hover:text-green-300 transition-colors">
+                          {t.example2.replace(/"/g, '')}
+                        </span>
+                      </div>
+                    </button>
+                    <button
+                      onClick={() => sendMessage(t.example3.replace(/"/g, ''))}
+                      disabled={!isConnected}
+                      className="bg-gradient-to-r from-green-900/60 to-emerald-900/60 hover:from-green-800/70 hover:to-emerald-800/70 border border-green-500/30 rounded-xl p-4 transition-all hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed group"
+                    >
+                      <div className="flex items-center gap-3 text-left">
+                        <span className="text-2xl">🔍</span>
+                        <span className="text-white font-medium group-hover:text-green-300 transition-colors">
+                          {t.example3.replace(/"/g, '')}
+                        </span>
+                      </div>
+                    </button>
                   </div>
                 </div>
               </div>
