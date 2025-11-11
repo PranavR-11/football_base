@@ -186,6 +186,7 @@ async def websocket_chat(websocket: WebSocket):
 
             # Override detected language with UI language selection
             session_context["detected_language"] = ui_language
+            print(f"[API] Setting language to: {ui_language} for query: {query[:50]}")
 
             # Stream responses with session-specific context
             async for response in run_agent_query(query, session_context):
