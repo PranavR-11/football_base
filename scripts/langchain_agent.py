@@ -2362,6 +2362,10 @@ def plot_comprehensive_comparison(
         width = 0.35 if len(players) == 2 else 0.25
 
         for i, player in enumerate(players[:4]):
+            # Safely get player data, skip if player not in bar_chart_data
+            if player not in bar_chart_data:
+                dbg(f"Warning: {player} not found in bar_chart_data, skipping")
+                continue
             values = [bar_chart_data[player].get(m, 0) for m in metrics_for_bar]
             offset = (i - len(players)/2 + 0.5) * width
             color = chart_colors[i % len(chart_colors)]
@@ -3483,8 +3487,8 @@ def handle_input(text: str):
                     # Create comprehensive comparison chart
                     if all_seasons and goals_data and assists_data:
                         comp_fname = f"comprehensive_comparison_{int(time.time())}.png"
-                        # Use canonical player names for plotting
-                        canonical_players = players
+                        # Use player names from the data dictionaries to ensure consistency
+                        canonical_players = list(goals_data.keys())
                         comp_path = plot_comprehensive_comparison(
                             canonical_players, all_seasons, goals_data, assists_data,
                             metrics_to_compare[:6], radar_percentiles, radar_actual_values,
