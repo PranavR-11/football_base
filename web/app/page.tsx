@@ -281,6 +281,20 @@ const languageNames: Record<Language, string> = {
   zh: '中文'
 }
 
+// Map language codes to backend language names
+const languageToBackend: Record<Language, string> = {
+  en: 'English',
+  es: 'Spanish',
+  fr: 'French',
+  ar: 'Arabic',
+  pt: 'Portuguese',
+  ru: 'Russian',
+  ja: 'Japanese',
+  de: 'German',
+  hi: 'Hindi',
+  zh: 'Chinese'
+}
+
 export default function Home() {
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState('')
@@ -472,12 +486,15 @@ export default function Home() {
       }
     ])
 
-    // Send to server
-    console.log('Sending message:', query)
-    ws.send(JSON.stringify({ query }))
+    // Send to server with UI language
+    console.log('Sending message:', query, 'Language:', languageToBackend[language])
+    ws.send(JSON.stringify({
+      query,
+      language: languageToBackend[language]
+    }))
     setInput('')
     setIsLoading(true)
-  }, [input])
+  }, [input, language])
 
   const handleZoomIn = () => {
     setImageZoom(prev => Math.min(prev + 20, 200))
