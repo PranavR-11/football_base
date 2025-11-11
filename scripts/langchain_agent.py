@@ -1906,7 +1906,7 @@ def plot_group_radar(players: List[str], metric_labels: List[str], players_perce
     if is_single_player:
         # Get the season for the single player
         player_name = players[0]
-        season_text = "Latest Season"
+        season_text = "24-25"  # Default to latest season
         if players_seasons and player_name in players_seasons and players_seasons[player_name]:
             season_value = players_seasons[player_name]
             # If it's already in "XX-YY" format, use it directly
@@ -1921,10 +1921,23 @@ def plot_group_radar(players: List[str], metric_labels: List[str], players_perce
                 except (ValueError, TypeError):
                     season_text = str(season_value)
 
-        ax.set_title(f"Performance Radar - {season_text}\n(Actual Stats)",
+        ax.set_title(f"Performance Radar - {season_text}",
                     fontsize=14, weight='bold', pad=20, color='white')
     else:
-        ax.set_title("Performance Radar\n(Percentiles vs League - Latest Relevant Season)",
+        # For multiple players, show the season range they're being compared on
+        season_info = "24-25"  # Default
+        if players_seasons:
+            # Get unique seasons from all players
+            unique_seasons = set()
+            for player in players:
+                if player in players_seasons and players_seasons[player]:
+                    unique_seasons.add(str(players_seasons[player]))
+            if unique_seasons:
+                if len(unique_seasons) == 1:
+                    season_info = list(unique_seasons)[0]
+                else:
+                    season_info = "Recent Seasons"
+        ax.set_title(f"Performance Radar\n(Percentiles vs League - {season_info})",
                     fontsize=14, weight='bold', pad=20, color='white')
 
     ax.set_ylim(0, 100)
@@ -2321,7 +2334,17 @@ def plot_comprehensive_comparison(
         ax_radar.set_thetagrids(np.degrees(angles[:-1]),
                                [m.replace('_', ' ').title() for m in metrics_for_radar],
                                fontsize=13, weight='bold', color='white')
-        ax_radar.set_title("📊 Performance Radar\n(Percentiles + Actual Values - Latest Relevant Season)",
+
+        # Build season info from radar_seasons
+        season_str = "24-25"  # Default
+        if radar_seasons:
+            unique_seasons = set(str(s) for s in radar_seasons.values() if s)
+            if len(unique_seasons) == 1:
+                season_str = list(unique_seasons)[0]
+            elif len(unique_seasons) > 1:
+                season_str = "Recent Seasons"
+
+        ax_radar.set_title(f"📊 Performance Radar\n(Percentiles + Actual Values - {season_str})",
                           fontsize=15, weight='bold', pad=25, color='white')
         # Increase ylim to accommodate label offsets
         ax_radar.set_ylim(0, 140)
@@ -2354,7 +2377,17 @@ def plot_comprehensive_comparison(
 
         ax_bar.set_xlabel('Metrics', fontweight='bold', fontsize=14, color='white')
         ax_bar.set_ylabel('Value', fontweight='bold', fontsize=14, color='white')
-        ax_bar.set_title('📊 Head-to-Head Stats\n(Latest Season)', fontweight='bold', fontsize=16, color='white')
+
+        # Build season info for bar chart
+        bar_season = "24-25"  # Default
+        if all_seasons:
+            if len(all_seasons) == 1:
+                bar_season = str(all_seasons[0])
+            else:
+                # Show the latest season for bar chart
+                bar_season = str(max(all_seasons))
+
+        ax_bar.set_title(f'📊 Head-to-Head Stats\n({bar_season})', fontweight='bold', fontsize=16, color='white')
         ax_bar.set_xticks(x)
         ax_bar.set_xticklabels([m.replace('_', ' ').title() for m in metrics_for_bar],
                                rotation=20, ha='right', fontsize=12, color='white')
@@ -2386,8 +2419,11 @@ def llm_fallback_answer(question: str, rag_ctx: str, rag_hits: List[Dict[str,Any
         is_biographical = any(keyword in question.lower() for keyword in ["who is", "who's", "tell me about", "what do you know about", "describe"])
         
         if is_biographical:
+            user_language = CONTEXT.get("detected_language", "English")
             prompt = f"""
 You are a knowledgeable football analyst. The user is asking a general question about a player. Use the RAG snippets below to provide a concise, informative answer.
+
+IMPORTANT: Respond in {user_language}.
 
 RAG SNIPPETS:
 {rag_ctx}
@@ -2400,8 +2436,11 @@ Provide a brief, conversational answer (2-4 sentences) about the player based on
 IMPORTANT: Use plain text only. Do NOT use markdown formatting like ** for bold or __ for italics. Write in clear, natural language with proper punctuation and structure.
 """
         else:
+            user_language = CONTEXT.get("detected_language", "English")
             prompt = f"""
 You are a knowledgeable football analyst. Use the RAG snippets below. If exact numeric values are not present in the snippets, attempt an informed answer labeled clearly as ESTIMATE or BEST_EFFORT. If you use a proxy column (e.g. 'progressive_passes' for 'passes'), say so.
+
+IMPORTANT: Respond in {user_language}.
 
 {schema_line}
 
@@ -2426,8 +2465,12 @@ def answer_with_context(question, rag_ctx, rag_hits):
     cached = cache_get(cache_key)
     if cached is not None:
         return cached
+
+    user_language = CONTEXT.get("detected_language", "English")
     prompt = f"""
 You are a helpful football assistant. Use the RAG snippets below when available. If the snippets don't contain the specific data requested, provide a general knowledge answer about football, clearly distinguishing between data-backed facts and general knowledge.
+
+IMPORTANT: Respond in {user_language}.
 
 For multi-part questions, answer each part separately and clearly.
 
@@ -3165,7 +3208,8 @@ def handle_input(text: str):
     # If it's a plain greeting or chit-chat -> respond with LLM small-talk
     no_slots = not (players or raw_metrics or team or position or seasons_back)
     if intent == "natural" and no_slots:
-        small = llm.predict(f"You are a friendly football assistant. Reply briefly to this user message: {text}", max_tokens=120, temperature=0.7)
+        user_language = CONTEXT.get("detected_language", "English")
+        small = llm.predict(f"You are a friendly football assistant. Reply briefly in {user_language} to this user message: {text}", max_tokens=120, temperature=0.7)
         print(small)
         return
 
@@ -3523,7 +3567,7 @@ def handle_input(text: str):
 
                     ax.set_xlabel('Metrics', fontweight='bold', fontsize=12)
                     ax.set_ylabel('Value', fontweight='bold', fontsize=12)
-                    ax.set_title('📊 Head-to-Head Stats Comparison (Latest Season)', fontweight='bold', fontsize=14)
+                    ax.set_title('📊 Head-to-Head Stats Comparison (24-25)', fontweight='bold', fontsize=14)
                     ax.set_xticks(x)
                     ax.set_xticklabels([m.replace('_', ' ').title() for m in metrics_to_compare[:4]], rotation=15, ha='right')
                     ax.legend()
@@ -3546,7 +3590,10 @@ def handle_input(text: str):
                     "hits": hits
                 })
 
-            comparison_prompt = f"""You are a football analyst. Compare ALL {len(players)} players in detail:
+            user_language = CONTEXT.get("detected_language", "English")
+            comparison_prompt = f"""You are a football analyst. Compare ALL {len(players)} players in detail.
+
+IMPORTANT: Respond in {user_language}.
 
 """
             for i, data in enumerate(comparison_data, 1):
@@ -3616,7 +3663,10 @@ IMPORTANT RULES:
                 combined_rag_ctx = "\n\n".join(all_rag_ctx)
 
                 # Create enhanced prompt with comparison context
+                user_language = CONTEXT.get("detected_language", "English")
                 enhanced_prompt = f"""You are a knowledgeable football analyst. The user previously compared these players: {', '.join(players)}.
+
+IMPORTANT: Respond in {user_language}.
 
 Now they're asking a follow-up question:
 {text}

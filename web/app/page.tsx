@@ -302,7 +302,7 @@ export default function Home() {
   const [isLoading, setIsLoading] = useState(false)
   const [currentImage, setCurrentImage] = useState<string | null>(null)
   const [imageLoading, setImageLoading] = useState(false)
-  const [imageZoom, setImageZoom] = useState(100)
+  const [imageZoom, setImageZoom] = useState(80)  // Default to 80% for better radar chart visibility
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [language, setLanguage] = useState<Language>('en')
   const [videoStartTime, setVideoStartTime] = useState(0)
