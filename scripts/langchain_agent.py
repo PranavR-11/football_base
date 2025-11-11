@@ -2967,14 +2967,15 @@ def handle_input(text: str):
 
     # Detect language for this query and store in CONTEXT
     # BUT: If UI already set a language preference, use that instead of auto-detecting
-    print(f"[AGENT] CONTEXT detected_language BEFORE check: {CONTEXT.get('detected_language')}")
+    import sys
+    print(f"[AGENT] CONTEXT detected_language BEFORE check: {CONTEXT.get('detected_language')}", file=sys.stderr, flush=True)
     if "detected_language" not in CONTEXT or not CONTEXT["detected_language"]:
         detected_lang = detect_language(text)
         CONTEXT["detected_language"] = detected_lang
-        print(f"[AGENT] Language auto-detected: {detected_lang}")
+        print(f"[AGENT] Language auto-detected: {detected_lang}", file=sys.stderr, flush=True)
         dbg("Language auto-detected for this query: %s", detected_lang)
     else:
-        print(f"[AGENT] Using UI-selected language: {CONTEXT['detected_language']}")
+        print(f"[AGENT] Using UI-selected language: {CONTEXT['detected_language']}", file=sys.stderr, flush=True)
         dbg("Using UI-selected language: %s", CONTEXT["detected_language"])
 
     # Flag to track if we resolved disambiguation (skip re-parsing if true)

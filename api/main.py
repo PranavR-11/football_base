@@ -80,13 +80,19 @@ async def run_agent_query(query: str, session_context: dict) -> AsyncGenerator[d
     import io
     import glob
     import time
+    import sys
     from contextlib import redirect_stdout
 
     # Import the agent module and its CONTEXT
     from scripts import langchain_agent
 
+    # DEBUG: Print to stderr so it goes to docker logs (not captured by redirect_stdout)
+    print(f"[API] Language being set: {session_context.get('detected_language')}", file=sys.stderr, flush=True)
+
     # Restore this session's context into the agent's global CONTEXT
     langchain_agent.CONTEXT.update(session_context)
+
+    print(f"[API] CONTEXT after update: {langchain_agent.CONTEXT.get('detected_language')}", file=sys.stderr, flush=True)
 
     # Track existing images before running agent
     existing_images = set(glob.glob('*.png'))
