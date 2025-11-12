@@ -22,15 +22,11 @@ jobs:
           fetch-depth: 0
 
       - name: Setup SSH
-        uses: webfactory/ssh-agent@v0.9.0
-        with:
-          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
-
-      - name: Add server to known hosts
         run: |
           mkdir -p ~/.ssh
-          echo "${{ secrets.SSH_KNOWN_HOSTS }}" > ~/.ssh/known_hosts
-          chmod 600 ~/.ssh/known_hosts
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H ${{ secrets.SERVER_HOST }} >> ~/.ssh/known_hosts
 
       - name: Deploy to VPS
         env:
@@ -42,24 +38,13 @@ jobs:
           DOMAIN: ${{ secrets.DOMAIN }}
         run: |
           # Test SSH connection
-          ssh -o StrictHostKeyChecking=no $SERVER_USER@$SERVER_HOST "echo 'SSH connection successful'"
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no $SERVER_USER@$SERVER_HOST "echo 'SSH connection successful'"
 
-          # Create directory structure if needed
-          ssh $SERVER_USER@$SERVER_HOST "mkdir -p $SERVER_PATH/deploy/ionos"
+          # Pull latest code
+          ssh -i ~/.ssh/deploy_key $SERVER_USER@$SERVER_HOST "cd $SERVER_PATH && git fetch origin && git reset --hard origin/main"
 
-          # Write environment file remotely
-          ssh $SERVER_USER@$SERVER_HOST "cat > $SERVER_PATH/deploy/ionos/.env << 'EOF'
-          DOMAIN=${DOMAIN}
-          OPENAI_API_KEY=${OPENAI_API_KEY}
-          MCP_API_KEY=${MCP_API_KEY}
-          DATA_PATH=/app/data/FINAL_with_rag.csv
-          VECTORSTORE_DIR=/app/data/vectorstore
-          MODEL_PATH=/app/models/ridge_player_model.joblib
-          AGENT_DEBUG=False
-          EOF"
-
-          # Run deployment script
-          ssh $SERVER_USER@$SERVER_HOST "cd $SERVER_PATH && bash deploy/ionos/deploy.sh"
+          # Rebuild and restart containers
+          ssh -i ~/.ssh/deploy_key $SERVER_USER@$SERVER_HOST "cd $SERVER_PATH/deploy/ionos && docker compose down && docker compose build --no-cache api && docker compose up -d"
 
       - name: Verify deployment
         env:
@@ -67,11 +52,14 @@ jobs:
           SERVER_HOST: ${{ secrets.SERVER_HOST }}
           SERVER_PATH: ${{ secrets.SERVER_PATH }}
         run: |
+          # Wait for services to start
+          sleep 10
+
           # Check container status
-          ssh $SERVER_USER@$SERVER_HOST "cd $SERVER_PATH/deploy/ionos && docker compose ps"
+          ssh -i ~/.ssh/deploy_key $SERVER_USER@$SERVER_HOST "cd $SERVER_PATH/deploy/ionos && docker compose ps"
 
           # Show recent logs
-          ssh $SERVER_USER@$SERVER_HOST "cd $SERVER_PATH/deploy/ionos && docker compose logs --tail=20 api"
+          ssh -i ~/.ssh/deploy_key $SERVER_USER@$SERVER_HOST "cd $SERVER_PATH/deploy/ionos && docker compose logs --tail=20 api"
 
       - name: Deployment summary
         run: |
