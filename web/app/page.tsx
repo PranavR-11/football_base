@@ -584,26 +584,26 @@ export default function Home() {
 
       {/* Header */}
       <header className="bg-gradient-to-r from-green-950/80 via-emerald-900/80 to-green-950/80 backdrop-blur-md border-b-2 border-yellow-500/30 shadow-2xl relative z-10">
-        <div className="max-w-full mx-auto px-6 py-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <div className="text-5xl">⚽</div>
-              <div>
-                <h1 className="text-4xl font-bold bg-gradient-to-r from-green-400 via-emerald-300 to-teal-400 bg-clip-text text-transparent flex items-center gap-3">
+        <div className="max-w-full mx-auto px-3 sm:px-6 py-3 sm:py-6">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2 sm:gap-4 flex-1 min-w-0">
+              <div className="text-3xl sm:text-5xl">⚽</div>
+              <div className="min-w-0">
+                <h1 className="text-xl sm:text-2xl md:text-3xl lg:text-4xl font-bold bg-gradient-to-r from-green-400 via-emerald-300 to-teal-400 bg-clip-text text-transparent truncate">
                   {t.title}
                 </h1>
-                <p className="text-emerald-400 mt-1 text-sm font-semibold tracking-wide">
+                <p className="text-emerald-400 mt-1 text-xs sm:text-sm font-semibold tracking-wide truncate">
                   {isConnected ? `🟢 ${t.connected} • ${t.subtitle}` : `🔴 ${t.disconnected}`}
                 </p>
               </div>
             </div>
 
             {/* Language Selector */}
-            <div className="relative">
+            <div className="relative flex-shrink-0">
               <select
                 value={language}
                 onChange={(e) => setLanguage(e.target.value as Language)}
-                className="bg-green-900/50 border-2 border-green-500/30 rounded-lg px-4 py-2 text-white font-semibold cursor-pointer hover:bg-green-800/60 focus:outline-none focus:ring-2 focus:ring-green-500 transition-all appearance-none pr-10 backdrop-blur-sm"
+                className="bg-green-900/50 border-2 border-green-500/30 rounded-lg px-2 sm:px-4 py-2 text-white text-sm sm:text-base font-semibold cursor-pointer hover:bg-green-800/60 focus:outline-none focus:ring-2 focus:ring-green-500 transition-all appearance-none pr-8 sm:pr-10 backdrop-blur-sm"
               >
                 {(Object.keys(languageNames) as Language[]).map((lang) => (
                   <option key={lang} value={lang} className="bg-gray-900">
@@ -611,45 +611,45 @@ export default function Home() {
                   </option>
                 ))}
               </select>
-              <Globe className="absolute right-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-green-400 pointer-events-none" />
+              <Globe className="absolute right-2 sm:right-3 top-1/2 transform -translate-y-1/2 w-4 h-4 sm:w-5 sm:h-5 text-green-400 pointer-events-none" />
             </div>
           </div>
         </div>
       </header>
 
       {/* Main Container */}
-      <main className="max-w-full mx-auto px-4 py-8 flex gap-4 relative z-10 h-[calc(100vh-140px)]">
+      <main className="max-w-full mx-auto px-2 sm:px-4 py-4 sm:py-8 flex flex-col lg:flex-row gap-4 relative z-10 h-[calc(100vh-80px)] sm:h-[calc(100vh-100px)] lg:h-[calc(100vh-140px)]">
         {/* Chat Container */}
-        <div className={`bg-gradient-to-br from-gray-900/40 via-green-950/50 to-gray-900/40 backdrop-blur-xl rounded-3xl shadow-2xl border-2 border-green-400/40 overflow-hidden transition-all duration-500 flex flex-col ${
+        <div className={`bg-gradient-to-br from-gray-900/40 via-green-950/50 to-gray-900/40 backdrop-blur-xl rounded-2xl sm:rounded-3xl shadow-2xl border-2 border-green-400/40 overflow-hidden transition-all duration-500 flex flex-col ${
           currentImage || imageLoading
-            ? 'w-1/2'
+            ? 'w-full lg:w-1/2'
             : messages.length === 0
               ? 'w-full max-w-3xl mx-auto'
               : 'w-full max-w-5xl mx-auto'
         }`} style={{ backdropFilter: 'blur(20px) saturate(180%)' }}>
           {/* Messages */}
-          <div className="flex-1 overflow-y-auto p-6 space-y-4 bg-gradient-to-b from-black/20 to-transparent relative">
+          <div className="flex-1 overflow-y-auto p-3 sm:p-6 space-y-4 bg-gradient-to-b from-black/20 to-transparent relative">
             {messages.length === 0 && (
-              <div className="text-center text-white/70 mt-32 relative z-10">
-                <div className="text-6xl mb-6 animate-bounce">⚽</div>
-                <h2 className="text-3xl font-bold mb-4 bg-gradient-to-r from-green-400 to-emerald-300 bg-clip-text text-transparent">
+              <div className="text-center text-white/70 mt-8 sm:mt-16 lg:mt-32 relative z-10">
+                <div className="text-4xl sm:text-6xl mb-4 sm:mb-6 animate-bounce">⚽</div>
+                <h2 className="text-2xl sm:text-3xl font-bold mb-3 sm:mb-4 bg-gradient-to-r from-green-400 to-emerald-300 bg-clip-text text-transparent px-4">
                   {t.welcome}
                 </h2>
-                <p className="text-xl mb-6 text-green-300/90">
+                <p className="text-base sm:text-xl mb-4 sm:mb-6 text-green-300/90 px-4">
                   {t.welcomeSubtitle}
                 </p>
-                <div className="mt-8">
-                  <p className="text-sm font-semibold text-green-400 mb-6 tracking-wide">✨ {t.tryThese}</p>
-                  <div className="flex gap-4 max-w-5xl mx-auto justify-center">
+                <div className="mt-6 sm:mt-8">
+                  <p className="text-xs sm:text-sm font-semibold text-green-400 mb-4 sm:mb-6 tracking-wide">✨ {t.tryThese}</p>
+                  <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 max-w-5xl mx-auto justify-center px-4">
                     <button
                       onClick={() => sendMessage(t.example1.replace(/"/g, ''))}
                       disabled={!isConnected}
-                      className="bg-gradient-to-br from-green-900/30 to-emerald-900/30 hover:from-green-800/50 hover:to-emerald-800/50 backdrop-blur-md border border-green-400/30 hover:border-green-300/60 rounded-2xl px-6 py-5 transition-all duration-300 hover:scale-105 hover:-translate-y-1 hover:shadow-lg hover:shadow-green-500/30 disabled:opacity-50 disabled:cursor-not-allowed group flex-1 max-w-xs"
+                      className="bg-gradient-to-br from-green-900/30 to-emerald-900/30 hover:from-green-800/50 hover:to-emerald-800/50 backdrop-blur-md border border-green-400/30 hover:border-green-300/60 rounded-xl sm:rounded-2xl px-4 sm:px-6 py-4 sm:py-5 transition-all duration-300 hover:scale-105 hover:-translate-y-1 hover:shadow-lg hover:shadow-green-500/30 disabled:opacity-50 disabled:cursor-not-allowed group flex-1 max-w-xs"
                       style={{ backdropFilter: 'blur(12px)' }}
                     >
                       <div className="flex flex-col items-center gap-2 text-center">
-                        <span className="text-3xl group-hover:scale-110 transition-transform duration-300">💬</span>
-                        <span className="text-white font-medium text-sm group-hover:text-green-300 transition-colors">
+                        <span className="text-2xl sm:text-3xl group-hover:scale-110 transition-transform duration-300">💬</span>
+                        <span className="text-white font-medium text-xs sm:text-sm group-hover:text-green-300 transition-colors">
                           {t.example1.replace(/"/g, '')}
                         </span>
                       </div>
@@ -657,12 +657,12 @@ export default function Home() {
                     <button
                       onClick={() => sendMessage(t.example2.replace(/"/g, ''))}
                       disabled={!isConnected}
-                      className="bg-gradient-to-br from-green-900/30 to-emerald-900/30 hover:from-green-800/50 hover:to-emerald-800/50 backdrop-blur-md border border-green-400/30 hover:border-green-300/60 rounded-2xl px-6 py-5 transition-all duration-300 hover:scale-105 hover:-translate-y-1 hover:shadow-lg hover:shadow-green-500/30 disabled:opacity-50 disabled:cursor-not-allowed group flex-1 max-w-xs"
+                      className="bg-gradient-to-br from-green-900/30 to-emerald-900/30 hover:from-green-800/50 hover:to-emerald-800/50 backdrop-blur-md border border-green-400/30 hover:border-green-300/60 rounded-xl sm:rounded-2xl px-4 sm:px-6 py-4 sm:py-5 transition-all duration-300 hover:scale-105 hover:-translate-y-1 hover:shadow-lg hover:shadow-green-500/30 disabled:opacity-50 disabled:cursor-not-allowed group flex-1 max-w-xs"
                       style={{ backdropFilter: 'blur(12px)' }}
                     >
                       <div className="flex flex-col items-center gap-2 text-center">
-                        <span className="text-3xl group-hover:scale-110 transition-transform duration-300">📊</span>
-                        <span className="text-white font-medium text-sm group-hover:text-green-300 transition-colors">
+                        <span className="text-2xl sm:text-3xl group-hover:scale-110 transition-transform duration-300">📊</span>
+                        <span className="text-white font-medium text-xs sm:text-sm group-hover:text-green-300 transition-colors">
                           {t.example2.replace(/"/g, '')}
                         </span>
                       </div>
@@ -670,12 +670,12 @@ export default function Home() {
                     <button
                       onClick={() => sendMessage(t.example3.replace(/"/g, ''))}
                       disabled={!isConnected}
-                      className="bg-gradient-to-br from-green-900/30 to-emerald-900/30 hover:from-green-800/50 hover:to-emerald-800/50 backdrop-blur-md border border-green-400/30 hover:border-green-300/60 rounded-2xl px-6 py-5 transition-all duration-300 hover:scale-105 hover:-translate-y-1 hover:shadow-lg hover:shadow-green-500/30 disabled:opacity-50 disabled:cursor-not-allowed group flex-1 max-w-xs"
+                      className="bg-gradient-to-br from-green-900/30 to-emerald-900/30 hover:from-green-800/50 hover:to-emerald-800/50 backdrop-blur-md border border-green-400/30 hover:border-green-300/60 rounded-xl sm:rounded-2xl px-4 sm:px-6 py-4 sm:py-5 transition-all duration-300 hover:scale-105 hover:-translate-y-1 hover:shadow-lg hover:shadow-green-500/30 disabled:opacity-50 disabled:cursor-not-allowed group flex-1 max-w-xs"
                       style={{ backdropFilter: 'blur(12px)' }}
                     >
                       <div className="flex flex-col items-center gap-2 text-center">
-                        <span className="text-3xl group-hover:scale-110 transition-transform duration-300">🔍</span>
-                        <span className="text-white font-medium text-sm group-hover:text-green-300 transition-colors">
+                        <span className="text-2xl sm:text-3xl group-hover:scale-110 transition-transform duration-300">🔍</span>
+                        <span className="text-white font-medium text-xs sm:text-sm group-hover:text-green-300 transition-colors">
                           {t.example3.replace(/"/g, '')}
                         </span>
                       </div>
@@ -695,8 +695,8 @@ export default function Home() {
                 >
                   <div
                     className={`${
-                      msg.type === 'user' ? 'max-w-lg' : 'max-w-4xl'
-                    } px-6 py-4 rounded-2xl shadow-lg ${
+                      msg.type === 'user' ? 'max-w-[85%] sm:max-w-lg' : 'max-w-[95%] sm:max-w-4xl'
+                    } px-4 sm:px-6 py-3 sm:py-4 rounded-xl sm:rounded-2xl shadow-lg ${
                       msg.type === 'user'
                         ? 'bg-gradient-to-br from-green-600 to-emerald-700 text-white border border-green-400/30'
                         : 'bg-gradient-to-br from-gray-800/90 to-green-900/60 text-white backdrop-blur-sm border border-green-500/20'
@@ -747,19 +747,19 @@ export default function Home() {
           </div>
 
           {/* Input */}
-          <div className="flex-shrink-0 border-t-2 border-green-500/30 p-6 bg-gradient-to-r from-black/40 via-green-950/40 to-black/40 backdrop-blur-md">
+          <div className="flex-shrink-0 border-t-2 border-green-500/30 p-3 sm:p-6 bg-gradient-to-r from-black/40 via-green-950/40 to-black/40 backdrop-blur-md">
             {/* Data coverage disclaimer */}
-            <div className="text-xs text-green-300/70 mb-3 text-center">
+            <div className="text-[10px] sm:text-xs text-green-300/70 mb-2 sm:mb-3 text-center">
               Data: Europe Top-5 leagues (2021–mid-2025, domestic seasons only)
             </div>
-            <div className="flex gap-4">
+            <div className="flex gap-2 sm:gap-4">
               <input
                 type="text"
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyPress={(e) => e.key === 'Enter' && sendMessage()}
                 placeholder={`⚽ ${t.placeholder}`}
-                className="flex-1 bg-gray-900/80 border-2 border-green-500/30 rounded-xl px-6 py-4 text-white placeholder-green-400/40 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-400 backdrop-blur-sm transition-all"
+                className="flex-1 bg-gray-900/80 border-2 border-green-500/30 rounded-lg sm:rounded-xl px-3 sm:px-6 py-3 sm:py-4 text-sm sm:text-base text-white placeholder-green-400/40 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-400 backdrop-blur-sm transition-all"
                 disabled={!isConnected || isLoading}
                 autoComplete="off"
                 autoCorrect="off"
@@ -769,10 +769,10 @@ export default function Home() {
               <button
                 onClick={() => sendMessage()}
                 disabled={!isConnected || isLoading || !input.trim()}
-                className="bg-gradient-to-r from-green-600 to-emerald-700 hover:from-green-500 hover:to-emerald-600 disabled:from-gray-600 disabled:to-gray-700 disabled:cursor-not-allowed text-white px-8 py-4 rounded-xl font-bold transition-all shadow-lg flex items-center gap-2 border border-green-400/30"
+                className="bg-gradient-to-r from-green-600 to-emerald-700 hover:from-green-500 hover:to-emerald-600 disabled:from-gray-600 disabled:to-gray-700 disabled:cursor-not-allowed text-white px-4 sm:px-8 py-3 sm:py-4 rounded-lg sm:rounded-xl text-sm sm:text-base font-bold transition-all shadow-lg flex items-center gap-1 sm:gap-2 border border-green-400/30"
               >
-                <Send className="w-5 h-5" />
-                {t.send}
+                <Send className="w-4 h-4 sm:w-5 sm:h-5" />
+                <span className="hidden sm:inline">{t.send}</span>
               </button>
             </div>
           </div>
@@ -780,28 +780,28 @@ export default function Home() {
 
         {/* Image Viewer Panel */}
         {(currentImage || imageLoading) && (
-          <div className="w-1/2 bg-gradient-to-br from-gray-900/40 via-green-950/50 to-gray-900/40 backdrop-blur-xl rounded-3xl shadow-2xl border-2 border-green-400/40 p-6 flex flex-col" style={{ backdropFilter: 'blur(20px) saturate(180%)' }}>
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-bold bg-gradient-to-r from-green-400 to-emerald-300 bg-clip-text text-transparent">📊 {t.matchAnalytics}</h2>
+          <div className="w-full lg:w-1/2 bg-gradient-to-br from-gray-900/40 via-green-950/50 to-gray-900/40 backdrop-blur-xl rounded-2xl sm:rounded-3xl shadow-2xl border-2 border-green-400/40 p-3 sm:p-6 flex flex-col max-h-[50vh] lg:max-h-none" style={{ backdropFilter: 'blur(20px) saturate(180%)' }}>
+            <div className="flex items-center justify-between mb-3 sm:mb-4">
+              <h2 className="text-base sm:text-xl font-bold bg-gradient-to-r from-green-400 to-emerald-300 bg-clip-text text-transparent">📊 {t.matchAnalytics}</h2>
               <button
                 onClick={() => {
                   setCurrentImage(null)
                   setImageLoading(false)
-                  setImageZoom(100)
+                  setImageZoom(80)
                 }}
                 className="text-white/60 hover:text-white transition-colors"
               >
-                <X className="w-6 h-6" />
+                <X className="w-5 h-5 sm:w-6 sm:h-6" />
               </button>
             </div>
 
             {imageLoading && !currentImage && (
               <div className="flex-1 flex items-center justify-center">
                 <div className="text-center">
-                  <div className="text-6xl mb-4 animate-bounce">⚽</div>
-                  <Loader2 className="w-12 h-12 text-green-400 animate-spin mx-auto mb-4" />
-                  <p className="text-green-300 font-semibold">{t.analyzingData}</p>
-                  <p className="text-green-500/60 text-sm mt-2">{t.crunchingNumbers} 📊</p>
+                  <div className="text-4xl sm:text-6xl mb-4 animate-bounce">⚽</div>
+                  <Loader2 className="w-8 h-8 sm:w-12 sm:h-12 text-green-400 animate-spin mx-auto mb-4" />
+                  <p className="text-sm sm:text-base text-green-300 font-semibold">{t.analyzingData}</p>
+                  <p className="text-green-500/60 text-xs sm:text-sm mt-2">{t.crunchingNumbers} 📊</p>
                 </div>
               </div>
             )}
@@ -809,45 +809,45 @@ export default function Home() {
             {currentImage && (
               <>
                 {/* Zoom Controls */}
-                <div className="flex gap-2 mb-4">
+                <div className="flex flex-wrap gap-1 sm:gap-2 mb-3 sm:mb-4">
                   <button
                     onClick={handleZoomOut}
                     disabled={imageZoom <= 50}
-                    className="bg-green-900/50 hover:bg-green-800/60 disabled:opacity-50 disabled:cursor-not-allowed text-green-300 px-4 py-2 rounded-lg transition-colors flex items-center gap-2 border border-green-500/30"
+                    className="bg-green-900/50 hover:bg-green-800/60 disabled:opacity-50 disabled:cursor-not-allowed text-green-300 px-2 sm:px-4 py-1.5 sm:py-2 rounded-lg transition-colors flex items-center gap-1 sm:gap-2 border border-green-500/30 text-xs sm:text-sm"
                   >
-                    <ZoomOut className="w-4 h-4" />
-                    {t.zoomOut}
+                    <ZoomOut className="w-3 h-3 sm:w-4 sm:h-4" />
+                    <span className="hidden sm:inline">{t.zoomOut}</span>
                   </button>
                   <button
                     onClick={handleZoomIn}
                     disabled={imageZoom >= 200}
-                    className="bg-green-900/50 hover:bg-green-800/60 disabled:opacity-50 disabled:cursor-not-allowed text-green-300 px-4 py-2 rounded-lg transition-colors flex items-center gap-2 border border-green-500/30"
+                    className="bg-green-900/50 hover:bg-green-800/60 disabled:opacity-50 disabled:cursor-not-allowed text-green-300 px-2 sm:px-4 py-1.5 sm:py-2 rounded-lg transition-colors flex items-center gap-1 sm:gap-2 border border-green-500/30 text-xs sm:text-sm"
                   >
-                    <ZoomIn className="w-4 h-4" />
-                    {t.zoomIn}
+                    <ZoomIn className="w-3 h-3 sm:w-4 sm:h-4" />
+                    <span className="hidden sm:inline">{t.zoomIn}</span>
                   </button>
                   <button
                     onClick={toggleFullscreen}
-                    className="bg-green-900/50 hover:bg-green-800/60 text-green-300 px-4 py-2 rounded-lg transition-colors flex items-center gap-2 border border-green-500/30"
+                    className="bg-green-900/50 hover:bg-green-800/60 text-green-300 px-2 sm:px-4 py-1.5 sm:py-2 rounded-lg transition-colors flex items-center gap-1 sm:gap-2 border border-green-500/30 text-xs sm:text-sm"
                   >
-                    {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
-                    {isFullscreen ? t.exit : t.fullscreen}
+                    {isFullscreen ? <Minimize2 className="w-3 h-3 sm:w-4 sm:h-4" /> : <Maximize2 className="w-3 h-3 sm:w-4 sm:h-4" />}
+                    <span className="hidden sm:inline">{isFullscreen ? t.exit : t.fullscreen}</span>
                   </button>
                   <button
                     onClick={downloadImage}
-                    className="bg-gradient-to-r from-green-700/60 to-emerald-700/60 hover:from-green-600/70 hover:to-emerald-600/70 text-white px-4 py-2 rounded-lg transition-colors flex items-center gap-2 border border-green-400/40 font-semibold"
+                    className="bg-gradient-to-r from-green-700/60 to-emerald-700/60 hover:from-green-600/70 hover:to-emerald-600/70 text-white px-2 sm:px-4 py-1.5 sm:py-2 rounded-lg transition-colors flex items-center gap-1 sm:gap-2 border border-green-400/40 font-semibold text-xs sm:text-sm"
                   >
-                    <Download className="w-4 h-4" />
-                    {t.download}
+                    <Download className="w-3 h-3 sm:w-4 sm:h-4" />
+                    <span className="hidden sm:inline">{t.download}</span>
                   </button>
-                  <span className="bg-gradient-to-r from-green-900/60 to-emerald-900/60 text-green-300 font-bold px-4 py-2 rounded-lg ml-auto border border-green-500/30">
+                  <span className="bg-gradient-to-r from-green-900/60 to-emerald-900/60 text-green-300 font-bold px-2 sm:px-4 py-1.5 sm:py-2 rounded-lg ml-auto border border-green-500/30 text-xs sm:text-sm">
                     {imageZoom}%
                   </span>
                 </div>
 
                 {/* Image Container */}
                 <div className="flex-1 bg-gradient-to-br from-black/50 to-green-950/30 rounded-xl overflow-auto relative border border-green-500/20">
-                  <div className="min-h-full flex items-center justify-center p-4">
+                  <div className="min-h-full flex items-center justify-center p-2 sm:p-4">
                     <img
                       src={`data:image/png;base64,${currentImage}`}
                       alt="Comparison chart"
