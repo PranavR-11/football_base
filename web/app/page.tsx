@@ -598,7 +598,7 @@ export default function Home() {
             filter: 'brightness(0.8) saturate(1.0)',
           }}
         >
-          <source src="/videos/1111-2.mp4" type="video/mp4" />
+          <source src="/videos/1111-2.mov" type="video/mp4" />
         </video>
 
         {/* Subtle green tint overlay */}
