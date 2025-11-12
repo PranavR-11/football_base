@@ -670,7 +670,7 @@ export default function Home() {
 
       {/* Main Container */}
       <main className="max-w-full mx-auto px-2 sm:px-4 py-4 sm:py-8 flex flex-col lg:flex-row gap-4 relative z-10 h-[calc(100vh-80px)] sm:h-[calc(100vh-100px)] lg:h-[calc(100vh-140px)]">
-        {/* Chat Container */}
+        {/* Chat Container - Always full width on mobile, split on desktop when image present */}
         <div className={`bg-gradient-to-br from-gray-900/40 via-green-950/50 to-gray-900/40 backdrop-blur-xl rounded-2xl sm:rounded-3xl shadow-2xl border-2 border-green-400/40 overflow-hidden transition-all duration-500 flex flex-col ${
           currentImage || imageLoading
             ? 'w-full lg:w-1/2'
@@ -754,28 +754,28 @@ export default function Home() {
                     }`}
                   >
                     {msg.type === 'user' ? (
-                      <p className="whitespace-pre-wrap">{msg.content}</p>
+                      <p className="whitespace-pre-wrap break-words">{msg.content}</p>
                     ) : (
                       <div className="prose prose-invert max-w-none">
-                        <div className="space-y-2 max-h-96 overflow-y-auto pr-2 scrollbar-thin">
+                        <div className="space-y-2 overflow-y-auto pr-2 scrollbar-thin">
                           {msg.content.split('\n').map((line, i) => {
                             // Check if line is all caps (headings like OVERVIEW, GOAL SCORING VS PLAYMAKING)
                             const isHeading = /^[A-Z\s&]+$/.test(line.trim()) && line.trim().length > 2
 
                             if (line.startsWith('###')) {
                               return (
-                                <h3 key={i} className="text-emerald-400 font-bold text-lg mt-4 first:mt-0">
+                                <h3 key={i} className="text-emerald-400 font-bold text-base sm:text-lg mt-4 first:mt-0 break-words">
                                   {line.replace('###', '').trim()}
                                 </h3>
                               )
                             } else if (isHeading) {
                               return (
-                                <h3 key={i} className="text-emerald-400 font-bold text-lg mt-4 mb-2 first:mt-0">
+                                <h3 key={i} className="text-emerald-400 font-bold text-base sm:text-lg mt-4 mb-2 first:mt-0 break-words">
                                   {line.trim()}
                                 </h3>
                               )
                             }
-                            return line ? <p key={i} className="text-gray-100 leading-relaxed">{line}</p> : <br key={i} />
+                            return line ? <p key={i} className="text-gray-100 text-sm sm:text-base leading-relaxed break-words">{line}</p> : <br key={i} />
                           })}
                         </div>
                       </div>
@@ -829,9 +829,20 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Image Viewer Panel */}
+        {/* Floating Chart Button (Mobile Only) */}
         {(currentImage || imageLoading) && (
-          <div className="w-full lg:w-1/2 bg-gradient-to-br from-gray-900/40 via-green-950/50 to-gray-900/40 backdrop-blur-xl rounded-2xl sm:rounded-3xl shadow-2xl border-2 border-green-400/40 p-3 sm:p-6 flex flex-col max-h-[50vh] lg:max-h-none" style={{ backdropFilter: 'blur(20px) saturate(180%)' }}>
+          <button
+            onClick={() => setIsFullscreen(true)}
+            className="lg:hidden fixed bottom-24 right-4 z-30 bg-gradient-to-r from-green-600 to-emerald-700 hover:from-green-500 hover:to-emerald-600 text-white p-4 rounded-full shadow-2xl border-2 border-green-400/50 flex items-center gap-2 animate-pulse"
+          >
+            <span className="text-2xl">📊</span>
+            <span className="font-bold text-sm">{t.matchAnalytics}</span>
+          </button>
+        )}
+
+        {/* Image Viewer Panel (Desktop Only) */}
+        {(currentImage || imageLoading) && (
+          <div className="hidden lg:flex w-full lg:w-1/2 bg-gradient-to-br from-gray-900/40 via-green-950/50 to-gray-900/40 backdrop-blur-xl rounded-2xl sm:rounded-3xl shadow-2xl border-2 border-green-400/40 p-3 sm:p-6 flex-col" style={{ backdropFilter: 'blur(20px) saturate(180%)' }}>
             <div className="flex items-center justify-between mb-3 sm:mb-4">
               <h2 className="text-base sm:text-xl font-bold bg-gradient-to-r from-green-400 to-emerald-300 bg-clip-text text-transparent">📊 {t.matchAnalytics}</h2>
               <button
@@ -923,21 +934,77 @@ export default function Home() {
       {/* Fullscreen Modal */}
       {isFullscreen && currentImage && (
         <div
-          className="fixed inset-0 z-50 bg-black/95 flex items-center justify-center p-8"
+          className="fixed inset-0 z-50 bg-black/98 flex flex-col"
           onClick={toggleFullscreen}
         >
-          <button
-            onClick={toggleFullscreen}
-            className="absolute top-4 right-4 text-white/80 hover:text-white"
-          >
-            <X className="w-8 h-8" />
-          </button>
-          <img
-            src={`data:image/png;base64,${currentImage}`}
-            alt="Comparison chart"
-            className="max-w-full max-h-full object-contain"
-            onClick={(e) => e.stopPropagation()}
-          />
+          {/* Header with controls */}
+          <div className="flex items-center justify-between p-4 bg-gradient-to-r from-green-900/50 to-emerald-900/50 backdrop-blur-md border-b border-green-500/30">
+            <h2 className="text-lg sm:text-xl font-bold text-green-400 flex items-center gap-2">
+              <span className="text-2xl">📊</span>
+              {t.matchAnalytics}
+            </h2>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={(e) => {
+                  e.stopPropagation()
+                  downloadImage()
+                }}
+                className="bg-green-700/60 hover:bg-green-600/70 text-white p-2 rounded-lg transition-colors"
+              >
+                <Download className="w-5 h-5" />
+              </button>
+              <button
+                onClick={toggleFullscreen}
+                className="bg-red-700/60 hover:bg-red-600/70 text-white p-2 rounded-lg transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+          </div>
+
+          {/* Image container with zoom controls */}
+          <div className="flex-1 overflow-auto p-4 flex items-center justify-center">
+            <img
+              src={`data:image/png;base64,${currentImage}`}
+              alt="Comparison chart"
+              className="w-full h-auto object-contain"
+              style={{ minHeight: '200px' }}
+              onClick={(e) => e.stopPropagation()}
+            />
+          </div>
+
+          {/* Zoom controls at bottom */}
+          <div className="flex items-center justify-center gap-2 p-4 bg-gradient-to-r from-green-900/50 to-emerald-900/50 backdrop-blur-md border-t border-green-500/30">
+            <button
+              onClick={(e) => {
+                e.stopPropagation()
+                handleZoomOut()
+              }}
+              disabled={imageZoom <= 50}
+              className="bg-green-700/60 hover:bg-green-600/70 disabled:opacity-50 text-white px-4 py-2 rounded-lg transition-colors flex items-center gap-2"
+            >
+              <ZoomOut className="w-4 h-4" />
+              <span className="text-sm">{t.zoomOut}</span>
+            </button>
+            <span className="text-green-300 font-bold px-4 py-2 rounded-lg bg-green-900/60 border border-green-500/30 min-w-[80px] text-center">
+              {imageZoom}%
+            </span>
+            <button
+              onClick={(e) => {
+                e.stopPropagation()
+                handleZoomIn()
+              }}
+              disabled={imageZoom >= 200}
+              className="bg-green-700/60 hover:bg-green-600/70 disabled:opacity-50 text-white px-4 py-2 rounded-lg transition-colors flex items-center gap-2"
+            >
+              <ZoomIn className="w-4 h-4" />
+              <span className="text-sm">{t.zoomIn}</span>
+            </button>
+          </div>
+
+          <div className="text-center text-white/60 text-xs pb-4">
+            {t.placeholder.includes('Tap') ? 'Tap outside to close' : 'Tap anywhere to close'}
+          </div>
         </div>
       )}
     </div>
