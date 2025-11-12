@@ -22,11 +22,18 @@ jobs:
           fetch-depth: 0
 
       - name: Setup SSH
+        env:
+          SSH_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
         run: |
           mkdir -p ~/.ssh
-          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
+          echo "$SSH_KEY" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
           ssh-keyscan -H ${{ secrets.SERVER_HOST }} >> ~/.ssh/known_hosts
+          # Verify key format
+          echo "Key first line:"
+          head -1 ~/.ssh/deploy_key
+          echo "Key line count:"
+          wc -l ~/.ssh/deploy_key
 
       - name: Deploy to VPS
         env:
