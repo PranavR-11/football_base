@@ -748,6 +748,10 @@ export default function Home() {
 
           {/* Input */}
           <div className="flex-shrink-0 border-t-2 border-green-500/30 p-6 bg-gradient-to-r from-black/40 via-green-950/40 to-black/40 backdrop-blur-md">
+            {/* Data coverage disclaimer */}
+            <div className="text-xs text-green-300/70 mb-3 text-center">
+              Data: Europe Top-5 leagues (2021–mid-2025, domestic seasons only)
+            </div>
             <div className="flex gap-4">
               <input
                 type="text"
