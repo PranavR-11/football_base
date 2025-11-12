@@ -323,6 +323,8 @@ export default function Home() {
   const currentMessageIdRef = useRef<string | null>(null)
   const accumulatedTextRef = useRef<string>('')
   const lastQueryRef = useRef<string>('')
+  const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const reconnectAttemptsRef = useRef(0)
 
   const t = translations[language]
 
@@ -362,120 +364,158 @@ export default function Home() {
   }, [messages])
 
   useEffect(() => {
-    // Guard: if socket already exists and is open/connecting, skip creation
-    if (wsRef.current &&
-        (wsRef.current.readyState === WebSocket.OPEN ||
-         wsRef.current.readyState === WebSocket.CONNECTING)) {
-      console.debug('⚠️ WebSocket already exists — skipping duplicate creation')
-      return
-    }
+    const connectWebSocket = () => {
+      // Guard: if socket already exists and is open/connecting, skip creation
+      if (wsRef.current &&
+          (wsRef.current.readyState === WebSocket.OPEN ||
+           wsRef.current.readyState === WebSocket.CONNECTING)) {
+        console.debug('⚠️ WebSocket already exists — skipping duplicate creation')
+        return
+      }
 
-    console.count('ws-effect-run')
+      console.count('ws-effect-run')
 
-    // Dynamic protocol selection for production
-    const proto = typeof window !== 'undefined' && window.location.protocol === 'https:' ? 'wss' : 'ws'
-    const wsUrl = process.env.NEXT_PUBLIC_WS_URL || `${proto}://localhost:8000/ws/chat`
+      // Dynamic protocol selection for production
+      const proto = typeof window !== 'undefined' && window.location.protocol === 'https:' ? 'wss' : 'ws'
+      const wsUrl = process.env.NEXT_PUBLIC_WS_URL || `${proto}://localhost:8000/ws/chat`
 
-    console.log('Creating WebSocket connection to:', wsUrl)
-    const ws = new WebSocket(wsUrl)
+      console.log('Creating WebSocket connection to:', wsUrl)
+      const ws = new WebSocket(wsUrl)
 
-    // Set ref immediately to prevent race conditions
-    wsRef.current = ws
+      // Set ref immediately to prevent race conditions
+      wsRef.current = ws
 
-    ws.onopen = () => {
-      console.log('✅ WebSocket connected')
-      setIsConnected(true)
-    }
+      ws.onopen = () => {
+        console.log('✅ WebSocket connected')
+        setIsConnected(true)
+        reconnectAttemptsRef.current = 0 // Reset reconnect attempts on successful connection
+      }
 
-    ws.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data)
+      ws.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data)
 
-        if (data.type === 'text') {
-          // Accumulate text lines into a single message
-          if (!currentMessageIdRef.current) {
-            // Start a new message
-            const newMessageId = Date.now().toString()
-            currentMessageIdRef.current = newMessageId
-            accumulatedTextRef.current = data.content
+          // Ignore keepalive pings
+          if (data.type === 'ping') {
+            return
+          }
+
+          if (data.type === 'text') {
+            // Accumulate text lines into a single message
+            if (!currentMessageIdRef.current) {
+              // Start a new message
+              const newMessageId = Date.now().toString()
+              currentMessageIdRef.current = newMessageId
+              accumulatedTextRef.current = data.content
+              setMessages(prev => [
+                ...prev,
+                {
+                  id: newMessageId,
+                  type: 'assistant',
+                  content: data.content,
+                  timestamp: new Date()
+                }
+              ])
+            } else {
+              // Append to existing message
+              accumulatedTextRef.current += '\n' + data.content
+              const msgId = currentMessageIdRef.current
+              const accumulated = accumulatedTextRef.current
+              setMessages(prev => prev.map(msg =>
+                msg.id === msgId
+                  ? { ...msg, content: accumulated }
+                  : msg
+              ))
+            }
+          } else if (data.type === 'image') {
+            setImageLoading(false)
+            setCurrentImage(data.data)
             setMessages(prev => [
               ...prev,
               {
-                id: newMessageId,
-                type: 'assistant',
-                content: data.content,
+                id: Date.now().toString(),
+                type: 'image',
+                content: data.filename,
+                imageData: data.data,
                 timestamp: new Date()
               }
             ])
-          } else {
-            // Append to existing message
-            accumulatedTextRef.current += '\n' + data.content
-            const msgId = currentMessageIdRef.current
-            const accumulated = accumulatedTextRef.current
-            setMessages(prev => prev.map(msg =>
-              msg.id === msgId
-                ? { ...msg, content: accumulated }
-                : msg
-            ))
-          }
-        } else if (data.type === 'image') {
-          setImageLoading(false)
-          setCurrentImage(data.data)
-          setMessages(prev => [
-            ...prev,
-            {
-              id: Date.now().toString(),
-              type: 'image',
-              content: data.filename,
-              imageData: data.data,
-              timestamp: new Date()
+          } else if (data.type === 'complete') {
+            // Finalize the current message
+            currentMessageIdRef.current = null
+            accumulatedTextRef.current = ''
+            setIsLoading(false)
+            setImageLoading(false)
+          } else if (data.type === 'ack') {
+            // Start fresh for new query
+            currentMessageIdRef.current = null
+            accumulatedTextRef.current = ''
+            // Check if this looks like a comparison query using ref
+            if (lastQueryRef.current.toLowerCase().includes('compar')) {
+              setImageLoading(true)
             }
-          ])
-        } else if (data.type === 'complete') {
-          // Finalize the current message
-          currentMessageIdRef.current = null
-          accumulatedTextRef.current = ''
-          setIsLoading(false)
-          setImageLoading(false)
-        } else if (data.type === 'ack') {
-          // Start fresh for new query
-          currentMessageIdRef.current = null
-          accumulatedTextRef.current = ''
-          // Check if this looks like a comparison query using ref
-          if (lastQueryRef.current.toLowerCase().includes('compar')) {
-            setImageLoading(true)
           }
+        } catch (error) {
+          console.error('Error parsing WebSocket message:', error)
         }
-      } catch (error) {
-        console.error('Error parsing WebSocket message:', error)
+      }
+
+      ws.onerror = (error) => {
+        console.error('❌ WebSocket error:', error)
+        setIsConnected(false)
+      }
+
+      ws.onclose = (event) => {
+        console.log('🔌 WebSocket closed:', event.code, event.reason)
+        setIsConnected(false)
+        // Clear ref only if this is the current socket
+        if (wsRef.current === ws) {
+          wsRef.current = null
+        }
+
+        // Attempt to reconnect with exponential backoff
+        const maxAttempts = 5
+        const attempt = reconnectAttemptsRef.current
+
+        if (attempt < maxAttempts) {
+          // Exponential backoff: 1s, 2s, 4s, 8s, 16s
+          const delay = Math.min(1000 * Math.pow(2, attempt), 16000)
+          console.log(`🔄 Reconnecting in ${delay}ms (attempt ${attempt + 1}/${maxAttempts})...`)
+
+          reconnectTimeoutRef.current = setTimeout(() => {
+            reconnectAttemptsRef.current += 1
+            connectWebSocket()
+          }, delay)
+        } else {
+          console.error('❌ Max reconnection attempts reached. Please refresh the page.')
+        }
       }
     }
 
-    ws.onerror = (error) => {
-      console.error('❌ WebSocket error:', error)
-      setIsConnected(false)
-    }
-
-    ws.onclose = (event) => {
-      console.log('🔌 WebSocket closed:', event.code, event.reason)
-      setIsConnected(false)
-      // Clear ref only if this is the current socket
-      if (wsRef.current === ws) {
-        wsRef.current = null
-      }
-    }
+    // Initial connection
+    connectWebSocket()
 
     return () => {
       console.log('Cleaning up WebSocket connection')
+
+      // Clear reconnection timeout
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current)
+        reconnectTimeoutRef.current = null
+      }
+
       try {
-        ws.onopen = null
-        ws.onmessage = null
-        ws.onerror = null
-        ws.onclose = null
-        // Only close if this is still the active socket
-        if (wsRef.current === ws) {
-          ws.close()
-          wsRef.current = null
+        const ws = wsRef.current
+        if (ws) {
+          ws.onopen = null
+          ws.onmessage = null
+          ws.onerror = null
+          ws.onclose = null
+          // Only close if this is still the active socket
+          if (wsRef.current === ws) {
+            ws.close()
+            wsRef.current = null
+          }
         }
       } catch (e) {
         console.warn('Error during WebSocket cleanup:', e)

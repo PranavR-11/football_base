@@ -168,8 +168,24 @@ async def health_check():
 async def websocket_chat(websocket: WebSocket):
     """
     WebSocket endpoint for real-time chat with the agent.
+    Includes keepalive pings to prevent idle disconnections.
     """
     await manager.connect(websocket)
+
+    # Create keepalive task to send pings every 30 seconds
+    async def keepalive():
+        try:
+            while True:
+                await asyncio.sleep(30)
+                if websocket.client_state.value == 1:  # CONNECTED
+                    try:
+                        await websocket.send_json({"type": "ping"})
+                    except:
+                        break
+        except asyncio.CancelledError:
+            pass
+
+    keepalive_task = asyncio.create_task(keepalive())
 
     try:
         while True:
@@ -199,8 +215,10 @@ async def websocket_chat(websocket: WebSocket):
                 await manager.send_message(response, websocket)
 
     except WebSocketDisconnect:
+        keepalive_task.cancel()
         manager.disconnect(websocket)
     except Exception as e:
+        keepalive_task.cancel()
         await manager.send_message({
             "type": "error",
             "content": f"Error: {str(e)}"
