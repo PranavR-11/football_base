@@ -23,17 +23,17 @@ jobs:
 
       - name: Setup SSH
         env:
-          SSH_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          SSH_KEY_B64: ${{ secrets.SSH_PRIVATE_KEY_BASE64 }}
         run: |
           mkdir -p ~/.ssh
-          echo "$SSH_KEY" > ~/.ssh/deploy_key
+          # decode the base64 secret into the key file
+          echo "$SSH_KEY_B64" | base64 -d > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
+          # add server host key to known_hosts
           ssh-keyscan -H ${{ secrets.SERVER_HOST }} >> ~/.ssh/known_hosts
-          # Verify key format
-          echo "Key first line:"
-          head -1 ~/.ssh/deploy_key
-          echo "Key line count:"
-          wc -l ~/.ssh/deploy_key
+          # debug info to ensure key stored correctly in the runner logs
+          echo "Key first line:" && head -1 ~/.ssh/deploy_key || true
+          echo "Key line count:" && wc -l ~/.ssh/deploy_key || true
 
       - name: Deploy to VPS
         env:
@@ -44,10 +44,10 @@ jobs:
           MCP_API_KEY: ${{ secrets.MCP_API_KEY }}
           DOMAIN: ${{ secrets.DOMAIN }}
         run: |
-          # Test SSH connection
-          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no $SERVER_USER@$SERVER_HOST "echo 'SSH connection successful'"
+          # Test SSH connection (shows output in logs)
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no $SERVER_USER@$SERVER_HOST "echo 'SSH connection successful' && whoami || true"
 
-          # Pull latest code
+          # Pull latest code (force reset to origin/main)
           ssh -i ~/.ssh/deploy_key $SERVER_USER@$SERVER_HOST "cd $SERVER_PATH && git fetch origin && git reset --hard origin/main"
 
           # Rebuild and restart containers
@@ -59,17 +59,11 @@ jobs:
           SERVER_HOST: ${{ secrets.SERVER_HOST }}
           SERVER_PATH: ${{ secrets.SERVER_PATH }}
         run: |
-          # Wait for services to start
           sleep 10
-
-          # Check container status
           ssh -i ~/.ssh/deploy_key $SERVER_USER@$SERVER_HOST "cd $SERVER_PATH/deploy/ionos && docker compose ps"
-
-          # Show recent logs
           ssh -i ~/.ssh/deploy_key $SERVER_USER@$SERVER_HOST "cd $SERVER_PATH/deploy/ionos && docker compose logs --tail=20 api"
 
       - name: Deployment summary
         run: |
-          echo "✅ Deployment completed successfully"
+          echo "✅ Deployment completed (if no failures above)."
           echo "🔗 API should be available at: https://${{ secrets.DOMAIN }}"
-          echo "🔍 Check logs with: ssh ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} 'cd ${{ secrets.SERVER_PATH }}/deploy/ionos && docker compose logs -f'"
