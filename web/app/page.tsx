@@ -35,7 +35,6 @@ const translations: Record<Language, {
   download: string
   analyzingData: string
   crunchingNumbers: string
-  dataDisclaimer: string
 }> = {
   en: {
     title: "Football Analytics AI",
@@ -58,8 +57,7 @@ const translations: Record<Language, {
     exit: "Exit",
     download: "Download",
     analyzingData: "Analyzing the match data...",
-    crunchingNumbers: "Crunching the numbers",
-    dataDisclaimer: "Data: Europe Top-5 leagues (2021–mid-2025, domestic seasons only)"
+    crunchingNumbers: "Crunching the numbers"
   },
   es: {
     title: "IA de Análisis de Fútbol",
@@ -82,8 +80,7 @@ const translations: Record<Language, {
     exit: "Salir",
     download: "Descargar",
     analyzingData: "Analizando los datos del partido...",
-    crunchingNumbers: "Procesando los números",
-    dataDisclaimer: "Datos: Ligas Top-5 de Europa (2021–mediados de 2025, solo temporadas domésticas)"
+    crunchingNumbers: "Procesando los números"
   },
   fr: {
     title: "IA d'Analyse de Football",
@@ -106,8 +103,7 @@ const translations: Record<Language, {
     exit: "Quitter",
     download: "Télécharger",
     analyzingData: "Analyse des données du match...",
-    crunchingNumbers: "Traitement des chiffres",
-    dataDisclaimer: "Données: Ligues Top-5 d'Europe (2021–mi-2025, saisons nationales uniquement)"
+    crunchingNumbers: "Traitement des chiffres"
   },
   ar: {
     title: "الذكاء الاصطناعي لتحليل كرة القدم",
@@ -130,8 +126,7 @@ const translations: Record<Language, {
     exit: "خروج",
     download: "تحميل",
     analyzingData: "...تحليل بيانات المباراة",
-    crunchingNumbers: "معالجة الأرقام",
-    dataDisclaimer: "البيانات: دوريات أوروبا الخمس الكبرى (2021–منتصف 2025، المواسم المحلية فقط)"
+    crunchingNumbers: "معالجة الأرقام"
   },
   pt: {
     title: "IA de Análise de Futebol",
@@ -154,8 +149,7 @@ const translations: Record<Language, {
     exit: "Sair",
     download: "Baixar",
     analyzingData: "Analisando os dados da partida...",
-    crunchingNumbers: "Processando os números",
-    dataDisclaimer: "Dados: Ligas Top-5 da Europa (2021–meados de 2025, apenas temporadas domésticas)"
+    crunchingNumbers: "Processando os números"
   },
   ru: {
     title: "ИИ для Анализа Футбола",
@@ -178,8 +172,7 @@ const translations: Record<Language, {
     exit: "Выход",
     download: "Скачать",
     analyzingData: "Анализ данных матча...",
-    crunchingNumbers: "Обработка чисел",
-    dataDisclaimer: "Данные: Топ-5 лиг Европы (2021–середина 2025, только национальные сезоны)"
+    crunchingNumbers: "Обработка чисел"
   },
   ja: {
     title: "サッカー分析AI",
@@ -202,8 +195,7 @@ const translations: Record<Language, {
     exit: "終了",
     download: "ダウンロード",
     analyzingData: "試合データを分析中...",
-    crunchingNumbers: "数字を処理中",
-    dataDisclaimer: "データ：欧州トップ5リーグ（2021年〜2025年半ば、国内シーズンのみ）"
+    crunchingNumbers: "数字を処理中"
   },
   de: {
     title: "Fußball-Analyse KI",
@@ -226,8 +218,7 @@ const translations: Record<Language, {
     exit: "Beenden",
     download: "Herunterladen",
     analyzingData: "Spieldaten werden analysiert...",
-    crunchingNumbers: "Zahlen werden verarbeitet",
-    dataDisclaimer: "Daten: Europas Top-5-Ligen (2021–Mitte 2025, nur nationale Saisons)"
+    crunchingNumbers: "Zahlen werden verarbeitet"
   },
   hi: {
     title: "फुटबॉल विश्लेषण AI",
@@ -250,8 +241,7 @@ const translations: Record<Language, {
     exit: "बाहर निकलें",
     download: "डाउनलोड",
     analyzingData: "मैच डेटा का विश्लेषण...",
-    crunchingNumbers: "संख्याओं को संसाधित करना",
-    dataDisclaimer: "डेटा: यूरोप की शीर्ष-5 लीग (2021–2025 के मध्य तक, केवल घरेलू सीज़न)"
+    crunchingNumbers: "संख्याओं को संसाधित करना"
   },
   zh: {
     title: "足球分析人工智能",
@@ -274,8 +264,7 @@ const translations: Record<Language, {
     exit: "退出",
     download: "下载",
     analyzingData: "分析比赛数据...",
-    crunchingNumbers: "处理数字中",
-    dataDisclaimer: "数据：欧洲五大联赛（2021年至2025年中，仅限国内赛季）"
+    crunchingNumbers: "处理数字中"
   }
 }
 
@@ -801,7 +790,7 @@ export default function Home() {
           <div className="flex-shrink-0 border-t-2 border-green-500/30 p-3 sm:p-6 bg-gradient-to-r from-black/40 via-green-950/40 to-black/40 backdrop-blur-md">
             {/* Data coverage disclaimer */}
             <div className="text-[10px] sm:text-xs text-green-300/70 mb-2 sm:mb-3 text-center">
-              {t.dataDisclaimer}
+              Data: Europe Top-5 leagues (2021–mid-2025, domestic seasons only)
             </div>
             <div className="flex gap-2 sm:gap-4">
               <input
