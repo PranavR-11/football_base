@@ -45,6 +45,43 @@ body {
     rgb(var(--background-start-rgb));
 }
 
+.fullscreen-modal {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.55);
+  z-index: 10000;
+  padding: 24px;
+  box-sizing: border-box;
+}
+
+.fullscreen-modal .chart-wrapper {
+  width: min(1200px, 95vw);
+  height: auto;
+  max-height: 90vh;
+  background: transparent;
+  overflow: auto;
+  border-radius: 12px;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5);
+}
+
+.fullscreen-modal .chart-canvas {
+  width: 100%;
+  max-height: 100%;
+}
+
+.fullscreen-modal .overlay,
+.fullscreen-modal .page-text {
+  pointer-events: none;
+  user-select: none;
+}
+
+body.fullscreen-open {
+  overflow: hidden;
+}
+
 @layer utilities {
   .text-balance {
     text-wrap: balance;

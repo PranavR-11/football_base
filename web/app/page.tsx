@@ -569,7 +569,7 @@ export default function Home() {
   }
 
   const toggleFullscreen = () => {
-    setIsFullscreen(!isFullscreen)
+    setIsFullscreen(prev => !prev)
   }
 
   const downloadImage = () => {
@@ -582,6 +582,20 @@ export default function Home() {
     link.click()
     document.body.removeChild(link)
   }
+
+  useEffect(() => {
+    if (typeof document === 'undefined') return
+
+    if (isFullscreen) {
+      document.body.classList.add('fullscreen-open')
+    } else {
+      document.body.classList.remove('fullscreen-open')
+    }
+
+    return () => {
+      document.body.classList.remove('fullscreen-open')
+    }
+  }, [isFullscreen])
 
   return (
     <div className="min-h-screen relative overflow-hidden">
@@ -933,77 +947,83 @@ export default function Home() {
 
       {/* Fullscreen Modal */}
       {isFullscreen && currentImage && (
-        <div
-          className="fixed inset-0 z-50 bg-black/98 flex flex-col"
-          onClick={toggleFullscreen}
-        >
-          {/* Header with controls */}
-          <div className="flex items-center justify-between p-4 bg-gradient-to-r from-green-900/50 to-emerald-900/50 backdrop-blur-md border-b border-green-500/30">
-            <h2 className="text-lg sm:text-xl font-bold text-green-400 flex items-center gap-2">
-              <span className="text-2xl">📊</span>
-              {t.matchAnalytics}
-            </h2>
-            <div className="flex items-center gap-2">
+        <div className="fullscreen-modal" onClick={toggleFullscreen}>
+          <div
+            className="chart-wrapper flex flex-col bg-gradient-to-b from-gray-900/90 via-gray-900/95 to-black/95 border border-emerald-500/30 text-white"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header with controls */}
+            <div className="flex items-center justify-between gap-3 p-4 border-b border-emerald-500/20 bg-black/40 backdrop-blur">
+              <h2 className="text-lg sm:text-xl font-bold text-green-200 flex items-center gap-2">
+                <span className="text-2xl">📊</span>
+                {t.matchAnalytics}
+              </h2>
+              <div className="flex items-center gap-2">
+                <button
+                  aria-label={t.download}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    downloadImage()
+                  }}
+                  className="bg-emerald-600/70 hover:bg-emerald-500/80 text-white p-2 rounded-lg transition-colors"
+                >
+                  <Download className="w-5 h-5" />
+                </button>
+                <button
+                  aria-label={t.exit}
+                  onClick={toggleFullscreen}
+                  className="bg-red-600/70 hover:bg-red-500/80 text-white p-2 rounded-lg transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+
+            {/* Image container */}
+            <div className="chart-canvas flex-1 flex items-center justify-center">
+              <div className="flex h-full w-full items-center justify-center overflow-auto p-4">
+                <img
+                  src={`data:image/png;base64,${currentImage}`}
+                  alt="Comparison chart"
+                  className="max-h-full max-w-full object-contain"
+                  style={{
+                    transform: `scale(${imageZoom / 100})`,
+                    transformOrigin: 'center',
+                    transition: 'transform 0.2s ease-out'
+                  }}
+                />
+              </div>
+            </div>
+
+            {/* Zoom controls */}
+            <div className="flex flex-wrap items-center justify-center gap-2 p-4 border-t border-emerald-500/20 bg-black/40 backdrop-blur">
               <button
                 onClick={(e) => {
                   e.stopPropagation()
-                  downloadImage()
+                  handleZoomOut()
                 }}
-                className="bg-green-700/60 hover:bg-green-600/70 text-white p-2 rounded-lg transition-colors"
+                disabled={imageZoom <= 50}
+                className="bg-emerald-700/70 hover:bg-emerald-600/70 disabled:opacity-40 text-white px-4 py-2 rounded-lg transition-colors flex items-center gap-2"
               >
-                <Download className="w-5 h-5" />
+                <ZoomOut className="w-4 h-4" />
+                <span className="text-sm">{t.zoomOut}</span>
               </button>
+              <span className="text-emerald-200 font-bold px-4 py-2 rounded-lg bg-emerald-950/60 border border-emerald-500/30 min-w-[80px] text-center">
+                {imageZoom}%
+              </span>
               <button
-                onClick={toggleFullscreen}
-                className="bg-red-700/60 hover:bg-red-600/70 text-white p-2 rounded-lg transition-colors"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  handleZoomIn()
+                }}
+                disabled={imageZoom >= 200}
+                className="bg-emerald-700/70 hover:bg-emerald-600/70 disabled:opacity-40 text-white px-4 py-2 rounded-lg transition-colors flex items-center gap-2"
               >
-                <X className="w-5 h-5" />
+                <ZoomIn className="w-4 h-4" />
+                <span className="text-sm">{t.zoomIn}</span>
               </button>
             </div>
-          </div>
-
-          {/* Image container with zoom controls */}
-          <div className="flex-1 overflow-auto p-4 flex items-center justify-center">
-            <img
-              src={`data:image/png;base64,${currentImage}`}
-              alt="Comparison chart"
-              className="w-full h-auto object-contain"
-              style={{ minHeight: '200px' }}
-              onClick={(e) => e.stopPropagation()}
-            />
-          </div>
-
-          {/* Zoom controls at bottom edited now*/}
-          <div className="flex items-center justify-center gap-2 p-4 bg-gradient-to-r from-green-900/50 to-emerald-900/50 backdrop-blur-md border-t border-green-500/30">
-            <button
-              onClick={(e) => {
-                e.stopPropagation()
-                handleZoomOut()
-              }}
-              disabled={imageZoom <= 50}
-              className="bg-green-700/60 hover:bg-green-600/70 disabled:opacity-50 text-white px-4 py-2 rounded-lg transition-colors flex items-center gap-2"
-            >
-              <ZoomOut className="w-4 h-4" />
-              <span className="text-sm">{t.zoomOut}</span>
-            </button>
-            <span className="text-green-300 font-bold px-4 py-2 rounded-lg bg-green-900/60 border border-green-500/30 min-w-[80px] text-center">
-              {imageZoom}%
-            </span>
-            <button
-              onClick={(e) => {
-                e.stopPropagation()
-                handleZoomIn()
-              }}
-              disabled={imageZoom >= 200}
-              className="bg-green-700/60 hover:bg-green-600/70 disabled:opacity-50 text-white px-4 py-2 rounded-lg transition-colors flex items-center gap-2"
-            >
-              <ZoomIn className="w-4 h-4" />
-              <span className="text-sm">{t.zoomIn}</span>
-            </button>
-          </div>
-
-          <div className="text-center text-white/60 text-xs pb-4">
-            {t.placeholder.includes('Tap') ? 'Tap outside to close' : 'Tap anywhere to close'}
+            <p className="text-center text-emerald-50/70 text-xs pb-2 pt-1">{t.placeholder.includes('Tap') ? 'Tap outside to close' : 'Tap anywhere to close'}</p>
           </div>
         </div>
       )}
