@@ -973,7 +973,7 @@ export default function Home() {
             />
           </div>
 
-          {/* Zoom controls at bottom */}
+          {/* Zoom controls at bottom edited now*/}
           <div className="flex items-center justify-center gap-2 p-4 bg-gradient-to-r from-green-900/50 to-emerald-900/50 backdrop-blur-md border-t border-green-500/30">
             <button
               onClick={(e) => {
