@@ -481,7 +481,7 @@ export default function Home() {
       }
     }
 
-    // Initial connection
+    // Initial connection new update
     connectWebSocket()
 
     return () => {
