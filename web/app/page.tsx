@@ -3,7 +3,8 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { Send, Loader2, ZoomIn, ZoomOut, Maximize2, X, Minimize2, Download, Globe } from 'lucide-react'
 import MessageViewer from '@/components/MessageViewer'
-import PlayerTimeSeriesChart from '@/components/PlayerTimeSeriesChart'
+import PlayerInsightsPanel from '@/components/PlayerInsightsPanel'
+import { createPlayerIndex, PlayerIndexEntry, PlayerMetricsStore } from '@/lib/playerMetrics'
 
 type Message = {
   id: string
@@ -319,6 +320,9 @@ export default function Home() {
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [generationKey, setGenerationKey] = useState(() => Date.now())
   const [scrollTargetId, setScrollTargetId] = useState<string | null>(null)
+  const [playerMetricsStore, setPlayerMetricsStore] = useState<PlayerMetricsStore>({})
+  const [playerIndex, setPlayerIndex] = useState<PlayerIndexEntry[]>([])
+  const [metricsLoading, setMetricsLoading] = useState(true)
   const [language, setLanguage] = useState<Language>('en')
   const [videoStartTime, setVideoStartTime] = useState(0)
   const videoRef = useRef<HTMLVideoElement>(null)
@@ -374,6 +378,34 @@ export default function Home() {
   useEffect(() => {
     scrollToBottom()
   }, [messages])
+
+  useEffect(() => {
+    let cancelled = false
+
+    const fetchMetrics = async () => {
+      try {
+        const response = await fetch('/data/player_metrics.json')
+        if (!response.ok) throw new Error('Failed to load player metrics')
+        const data: PlayerMetricsStore = await response.json()
+        if (!cancelled) {
+          setPlayerMetricsStore(data)
+          setPlayerIndex(createPlayerIndex(data))
+        }
+      } catch (error) {
+        console.error('Unable to load player metrics:', error)
+      } finally {
+        if (!cancelled) {
+          setMetricsLoading(false)
+        }
+      }
+    }
+
+    fetchMetrics()
+
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   useEffect(() => {
     const connectWebSocket = () => {
@@ -799,32 +831,13 @@ export default function Home() {
             })}
 
             {latestAssistantMessage && (
-              <div className="mt-6">
-                <div className="bg-gradient-to-br from-gray-900/80 via-emerald-900/60 to-black/70 border border-emerald-500/20 rounded-2xl p-4 sm:p-6 shadow-2xl">
-                  <div className="flex items-start justify-between gap-4">
-                    <div>
-                      <p className="text-emerald-300/80 text-xs uppercase tracking-[0.4em] mb-1">
-                        Dynamic Chart
-                      </p>
-                      <h3 className="text-white text-lg sm:text-xl font-bold">
-                        Performance trend spotlight
-                      </h3>
-                      <p className="text-emerald-100/70 text-xs sm:text-sm mt-1">
-                        Auto-updates when the AI answers, using keywords to pick player & metric.
-                      </p>
-                    </div>
-                    <span className="text-emerald-200 text-xs font-semibold bg-emerald-900/60 border border-emerald-400/30 rounded-full px-3 py-1">
-                      Beta
-                    </span>
-                  </div>
-                  <div className="mt-4 theme-default">
-                    <PlayerTimeSeriesChart
-                      responseText={latestAssistantMessage.content}
-                      generationKey={generationKey}
-                    />
-                  </div>
-                </div>
-              </div>
+              <PlayerInsightsPanel
+                aiText={latestAssistantMessage.content}
+                generationKey={generationKey}
+                store={playerMetricsStore}
+                index={playerIndex}
+                loading={metricsLoading}
+              />
             )}
 
             {isLoading && (
