@@ -115,4 +115,3 @@ const PlayerInsightsPanel = ({ aiText, generationKey, store, index, loading }: P
 }
 
 export default PlayerInsightsPanel
-'
