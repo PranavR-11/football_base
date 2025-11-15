@@ -87,3 +87,93 @@ body.fullscreen-open {
     text-wrap: balance;
   }
 }
+
+/* Themed markdown container for AI responses */
+:root {
+  --modal-bg: #0f2a19;
+  --modal-text: #e9f3ea;
+  --modal-muted: #b7cbb7;
+  --modal-accent-green: #39b56a;
+  --modal-card-bg: rgba(0, 0, 0, 0.25);
+  --modal-radius: 18px;
+}
+
+.theme-default .modal-markdown-container {
+  background: var(--modal-card-bg);
+  padding: 28px;
+  border-radius: var(--modal-radius);
+  color: var(--modal-text);
+  max-height: 74vh;
+  overflow: auto;
+  line-height: 1.6;
+  font-size: 18px;
+  font-family: "Inter", "Helvetica Neue", Arial, sans-serif;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6);
+}
+
+.theme-default .modal-markdown-container h1,
+.theme-default .modal-markdown-container h2,
+.theme-default .modal-markdown-container h3 {
+  color: var(--modal-accent-green);
+  margin-top: 10px;
+  margin-bottom: 14px;
+  font-weight: 800;
+  letter-spacing: 0.6px;
+}
+
+.theme-default .modal-markdown-container h1 {
+  font-size: 28px;
+}
+
+.theme-default .modal-markdown-container h2 {
+  font-size: 22px;
+}
+
+.theme-default .modal-markdown-container h3 {
+  font-size: 18px;
+}
+
+.theme-default .modal-markdown-container p {
+  color: var(--modal-text);
+  margin-bottom: 14px;
+  font-size: 16.5px;
+}
+
+.theme-default .modal-markdown-container blockquote {
+  border-left: 4px solid rgba(57, 181, 106, 0.22);
+  padding-left: 12px;
+  color: var(--modal-muted);
+  margin: 0 0 14px 0;
+}
+
+.theme-default .modal-markdown-container pre,
+.theme-default .modal-markdown-container code {
+  background: rgba(0, 0, 0, 0.25);
+  padding: 6px 8px;
+  border-radius: 8px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, "Roboto Mono", monospace;
+}
+
+.theme-default .modal-markdown-container ul,
+.theme-default .modal-markdown-container ol {
+  margin-left: 20px;
+  margin-bottom: 14px;
+}
+
+@media (max-width: 900px) {
+  .theme-default .modal-markdown-container {
+    font-size: 15px;
+    padding: 18px;
+  }
+
+  .theme-default .modal-markdown-container h1 {
+    font-size: 20px;
+  }
+}
+
+.theme-default .message-markdown {
+  background: transparent;
+  box-shadow: none;
+  padding: 0;
+  max-height: none;
+}

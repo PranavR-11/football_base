@@ -1,7 +1,9 @@
 'use client'
 
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { Send, Loader2, ZoomIn, ZoomOut, Maximize2, X, Minimize2, Download, Globe } from 'lucide-react'
+import MessageViewer from '@/components/MessageViewer'
+import PlayerTimeSeriesChart from '@/components/PlayerTimeSeriesChart'
 
 type Message = {
   id: string
@@ -304,6 +306,8 @@ export default function Home() {
   const [imageLoading, setImageLoading] = useState(false)
   const [imageZoom, setImageZoom] = useState(80)  // Default to 80% for better radar chart visibility
   const [isFullscreen, setIsFullscreen] = useState(false)
+  const [generationKey, setGenerationKey] = useState(() => Date.now())
+  const [scrollTargetId, setScrollTargetId] = useState<string | null>(null)
   const [language, setLanguage] = useState<Language>('en')
   const [videoStartTime, setVideoStartTime] = useState(0)
   const videoRef = useRef<HTMLVideoElement>(null)
@@ -316,6 +320,14 @@ export default function Home() {
   const reconnectAttemptsRef = useRef(0)
 
   const t = translations[language]
+  const latestAssistantMessage = useMemo(() => {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      if (messages[i].type === 'assistant') {
+        return messages[i]
+      }
+    }
+    return null
+  }, [messages])
 
   // Set random start time when component mounts and handle video loading
   useEffect(() => {
@@ -396,6 +408,7 @@ export default function Home() {
               const newMessageId = Date.now().toString()
               currentMessageIdRef.current = newMessageId
               accumulatedTextRef.current = data.content
+              setScrollTargetId(newMessageId)
               setMessages(prev => [
                 ...prev,
                 {
@@ -527,6 +540,7 @@ export default function Home() {
 
     // Store query in ref for comparison check
     lastQueryRef.current = query
+    setGenerationKey(Date.now())
 
     // Add user message (optimistic UI update)
     setMessages(prev => [
@@ -759,34 +773,48 @@ export default function Home() {
                     {msg.type === 'user' ? (
                       <p className="whitespace-pre-wrap break-words">{msg.content}</p>
                     ) : (
-                      <div className="prose prose-invert max-w-none">
-                        <div className="space-y-2 overflow-y-auto pr-2 scrollbar-thin">
-                          {msg.content.split('\n').map((line, i) => {
-                            // Check if line is all caps (headings like OVERVIEW, GOAL SCORING VS PLAYMAKING)
-                            const isHeading = /^[A-Z\s&]+$/.test(line.trim()) && line.trim().length > 2
-
-                            if (line.startsWith('###')) {
-                              return (
-                                <h3 key={i} className="text-emerald-400 font-bold text-base sm:text-lg mt-4 first:mt-0 break-words">
-                                  {line.replace('###', '').trim()}
-                                </h3>
-                              )
-                            } else if (isHeading) {
-                              return (
-                                <h3 key={i} className="text-emerald-400 font-bold text-base sm:text-lg mt-4 mb-2 first:mt-0 break-words">
-                                  {line.trim()}
-                                </h3>
-                              )
-                            }
-                            return line ? <p key={i} className="text-gray-100 text-sm sm:text-base leading-relaxed break-words">{line}</p> : <br key={i} />
-                          })}
-                        </div>
+                      <div className="theme-default">
+                        <MessageViewer
+                          message={msg.content}
+                          scrollKey={scrollTargetId === msg.id ? scrollTargetId : null}
+                          forceScrollToStart
+                          className="message-markdown"
+                        />
                       </div>
                     )}
                   </div>
                 </div>
               )
             })}
+
+            {latestAssistantMessage && (
+              <div className="mt-6">
+                <div className="bg-gradient-to-br from-gray-900/80 via-emerald-900/60 to-black/70 border border-emerald-500/20 rounded-2xl p-4 sm:p-6 shadow-2xl">
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <p className="text-emerald-300/80 text-xs uppercase tracking-[0.4em] mb-1">
+                        Dynamic Chart
+                      </p>
+                      <h3 className="text-white text-lg sm:text-xl font-bold">
+                        Performance trend spotlight
+                      </h3>
+                      <p className="text-emerald-100/70 text-xs sm:text-sm mt-1">
+                        Auto-updates when the AI answers, using keywords to pick player & metric.
+                      </p>
+                    </div>
+                    <span className="text-emerald-200 text-xs font-semibold bg-emerald-900/60 border border-emerald-400/30 rounded-full px-3 py-1">
+                      Beta
+                    </span>
+                  </div>
+                  <div className="mt-4 theme-default">
+                    <PlayerTimeSeriesChart
+                      responseText={latestAssistantMessage.content}
+                      generationKey={generationKey}
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
 
             {isLoading && (
               <div className="flex justify-start">
