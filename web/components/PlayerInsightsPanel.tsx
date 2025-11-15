@@ -11,7 +11,8 @@ import {
   PlayerMetricsStore,
   DEFAULT_COMPARISON_METRICS,
   filterPlayersWithData,
-  getMetricLabel
+  getMetricLabel,
+  MetricKey
 } from '@/lib/playerMetrics'
 
 type Props = {

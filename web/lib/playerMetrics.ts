@@ -1,5 +1,7 @@
 'use client'
 
+import type { ChartDataset } from 'chart.js'
+
 export type PlayerSeasonEntry = {
   season: string
   squad?: string
@@ -225,7 +227,7 @@ const radarFields: { key: keyof PlayerSeasonEntry; label: string; cap: number }[
 
 export const buildRadarData = (players: string[], store: PlayerMetricsStore) => {
   const datasets = players
-    .map((player, index) => {
+    .map<ChartDataset<'radar', number[]> | null>((player, index) => {
       const rows = sortSeasons(store[player] || [])
       if (!rows.length) return null
       const latest = rows[rows.length - 1]
@@ -243,7 +245,7 @@ export const buildRadarData = (players: string[], store: PlayerMetricsStore) => 
         pointBackgroundColor: chartColors[index % chartColors.length]
       }
     })
-    .filter(Boolean)
+    .filter((dataset): dataset is ChartDataset<'radar', number[]> => dataset !== null)
 
   if (!datasets.length) return null
 
@@ -257,11 +259,11 @@ export const buildHeadToHeadBarData = (
   players: string[],
   metrics: MetricKey[],
   store: PlayerMetricsStore
-) => {
+): { labels: string[]; datasets: ChartDataset<'bar', number[]>[] } | null => {
   if (players.length < 2) return null
   const labels = metrics.map((metric) => getMetricLabel(metric))
   const datasets = players
-    .map((player, index) => {
+    .map<ChartDataset<'bar', number[]> | null>((player, index) => {
       const rows = sortSeasons(store[player] || [])
       if (!rows.length) return null
       const latest = rows[rows.length - 1]
@@ -271,7 +273,7 @@ export const buildHeadToHeadBarData = (
         backgroundColor: `${chartColors[index % chartColors.length]}bb`
       }
     })
-    .filter(Boolean)
+    .filter((dataset): dataset is ChartDataset<'bar', number[]> => dataset !== null)
 
   if (!datasets.length) return null
 
