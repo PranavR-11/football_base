@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { Send, Loader2, ZoomIn, ZoomOut, Maximize2, X, Minimize2, Download, Globe } from 'lucide-react'
 import MessageViewer from '@/components/MessageViewer'
-import PlayerRadarPanel from '@/components/PlayerRadarPanel'
+import PlayerInsightsPanel from '@/components/PlayerInsightsPanel'
 import { createPlayerIndex, PlayerIndexEntry, PlayerMetricsStore } from '@/lib/playerMetrics'
 
 type Message = {
@@ -343,9 +343,9 @@ export default function Home() {
     }
     return null
   }, [messages])
-  const showRadarPanel = !!(latestAssistantMessage && !metricsLoading && playerIndex.length > 0)
+  const showAnalyticsPanel = !!(latestAssistantMessage && !metricsLoading && playerIndex.length > 0)
   const showImagePanel = !!(currentImage || imageLoading)
-  const showSideColumn = showRadarPanel || showImagePanel
+  const showSideColumn = showAnalyticsPanel || showImagePanel
   const chatWidthClass = showSideColumn
     ? 'w-full lg:w-1/2'
     : messages.length === 0
@@ -897,8 +897,8 @@ export default function Home() {
 
         {showSideColumn && (
           <div className="w-full lg:w-1/2 flex flex-col gap-4">
-            {showRadarPanel && latestAssistantMessage && (
-              <PlayerRadarPanel
+            {showAnalyticsPanel && latestAssistantMessage && (
+              <PlayerInsightsPanel
                 aiText={latestAssistantMessage.content}
                 generationKey={generationKey}
                 store={playerMetricsStore}
