@@ -343,6 +343,13 @@ export default function Home() {
     }
     return null
   }, [messages])
+  const hasInsights = !!latestAssistantMessage && !metricsLoading && playerIndex.length > 0
+  const showSideColumn = hasInsights || currentImage || imageLoading
+  const chatWidthClass = showSideColumn
+    ? 'w-full lg:w-1/2'
+    : messages.length === 0
+      ? 'w-full max-w-3xl mx-auto'
+      : 'w-full max-w-5xl mx-auto'
 
   // Set random start time when component mounts and handle video loading
   useEffect(() => {
@@ -731,13 +738,10 @@ export default function Home() {
       {/* Main Container */}
       <main className="max-w-full mx-auto px-2 sm:px-4 py-4 sm:py-8 flex flex-col lg:flex-row gap-4 relative z-10 h-[calc(100vh-80px)] sm:h-[calc(100vh-100px)] lg:h-[calc(100vh-140px)]">
         {/* Chat Container - Always full width on mobile, split on desktop when image present */}
-        <div className={`bg-gradient-to-br from-gray-900/40 via-green-950/50 to-gray-900/40 backdrop-blur-xl rounded-2xl sm:rounded-3xl shadow-2xl border-2 border-green-400/40 overflow-hidden transition-all duration-500 flex flex-col ${
-          currentImage || imageLoading
-            ? 'w-full lg:w-1/2'
-            : messages.length === 0
-              ? 'w-full max-w-3xl mx-auto'
-              : 'w-full max-w-5xl mx-auto'
-        }`} style={{ backdropFilter: 'blur(20px) saturate(180%)' }}>
+        <div
+          className={`bg-gradient-to-br from-gray-900/40 via-green-950/50 to-gray-900/40 backdrop-blur-xl rounded-2xl sm:rounded-3xl shadow-2xl border-2 border-green-400/40 overflow-hidden transition-all duration-500 flex flex-col ${chatWidthClass}`}
+          style={{ backdropFilter: 'blur(20px) saturate(180%)' }}
+        >
           {/* Messages */}
           <div className="flex-1 overflow-y-auto p-3 sm:p-6 space-y-4 bg-gradient-to-b from-black/20 to-transparent relative">
             {messages.length === 0 && (
@@ -830,16 +834,6 @@ export default function Home() {
               )
             })}
 
-            {latestAssistantMessage && (
-              <PlayerInsightsPanel
-                aiText={latestAssistantMessage.content}
-                generationKey={generationKey}
-                store={playerMetricsStore}
-                index={playerIndex}
-                loading={metricsLoading}
-              />
-            )}
-
             {isLoading && (
               <div className="flex justify-start">
                 <div className="bg-gradient-to-br from-gray-800/90 to-green-900/60 backdrop-blur-sm px-6 py-4 rounded-2xl border border-green-500/20 flex items-center gap-3">
@@ -895,92 +889,106 @@ export default function Home() {
           </button>
         )}
 
-        {/* Image Viewer Panel (Desktop Only) */}
-        {(currentImage || imageLoading) && (
-          <div className="hidden lg:flex w-full lg:w-1/2 bg-gradient-to-br from-gray-900/40 via-green-950/50 to-gray-900/40 backdrop-blur-xl rounded-2xl sm:rounded-3xl shadow-2xl border-2 border-green-400/40 p-3 sm:p-6 flex-col" style={{ backdropFilter: 'blur(20px) saturate(180%)' }}>
-            <div className="flex items-center justify-between mb-3 sm:mb-4">
-              <h2 className="text-base sm:text-xl font-bold bg-gradient-to-r from-green-400 to-emerald-300 bg-clip-text text-transparent">📊 {t.matchAnalytics}</h2>
-              <button
-                onClick={() => {
-                  setCurrentImage(null)
-                  setImageLoading(false)
-                  setImageZoom(80)
-                }}
-                className="text-white/60 hover:text-white transition-colors"
-              >
-                <X className="w-5 h-5 sm:w-6 sm:h-6" />
-              </button>
-            </div>
-
-            {imageLoading && !currentImage && (
-              <div className="flex-1 flex items-center justify-center">
-                <div className="text-center">
-                  <div className="text-4xl sm:text-6xl mb-4 animate-bounce">⚽</div>
-                  <Loader2 className="w-8 h-8 sm:w-12 sm:h-12 text-green-400 animate-spin mx-auto mb-4" />
-                  <p className="text-sm sm:text-base text-green-300 font-semibold">{t.analyzingData}</p>
-                  <p className="text-green-500/60 text-xs sm:text-sm mt-2">{t.crunchingNumbers} 📊</p>
-                </div>
-              </div>
+        {showSideColumn && (
+          <div className="w-full lg:w-1/2 flex flex-col gap-4">
+            {hasInsights && latestAssistantMessage && (
+              <PlayerInsightsPanel
+                aiText={latestAssistantMessage.content}
+                generationKey={generationKey}
+                store={playerMetricsStore}
+                index={playerIndex}
+                loading={metricsLoading}
+              />
             )}
 
-            {currentImage && (
-              <>
-                {/* Zoom Controls */}
-                <div className="flex flex-wrap gap-1 sm:gap-2 mb-3 sm:mb-4">
+            {(currentImage || imageLoading) && (
+              <div className="hidden lg:flex w-full bg-gradient-to-br from-gray-900/40 via-green-950/50 to-gray-900/40 backdrop-blur-xl rounded-2xl sm:rounded-3xl shadow-2xl border-2 border-green-400/40 p-3 sm:p-6 flex-col" style={{ backdropFilter: 'blur(20px) saturate(180%)' }}>
+                <div className="flex items-center justify-between mb-3 sm:mb-4">
+                  <h2 className="text-base sm:text-xl font-bold bg-gradient-to-r from-green-400 to-emerald-300 bg-clip-text text-transparent">📊 {t.matchAnalytics}</h2>
                   <button
-                    onClick={handleZoomOut}
-                    disabled={imageZoom <= 50}
-                    className="bg-green-900/50 hover:bg-green-800/60 disabled:opacity-50 disabled:cursor-not-allowed text-green-300 px-2 sm:px-4 py-1.5 sm:py-2 rounded-lg transition-colors flex items-center gap-1 sm:gap-2 border border-green-500/30 text-xs sm:text-sm"
+                    onClick={() => {
+                      setCurrentImage(null)
+                      setImageLoading(false)
+                      setImageZoom(80)
+                    }}
+                    className="text-white/60 hover:text-white transition-colors"
                   >
-                    <ZoomOut className="w-3 h-3 sm:w-4 sm:h-4" />
-                    <span className="hidden sm:inline">{t.zoomOut}</span>
+                    <X className="w-5 h-5 sm:w-6 sm:h-6" />
                   </button>
-                  <button
-                    onClick={handleZoomIn}
-                    disabled={imageZoom >= 200}
-                    className="bg-green-900/50 hover:bg-green-800/60 disabled:opacity-50 disabled:cursor-not-allowed text-green-300 px-2 sm:px-4 py-1.5 sm:py-2 rounded-lg transition-colors flex items-center gap-1 sm:gap-2 border border-green-500/30 text-xs sm:text-sm"
-                  >
-                    <ZoomIn className="w-3 h-3 sm:w-4 sm:h-4" />
-                    <span className="hidden sm:inline">{t.zoomIn}</span>
-                  </button>
-                  <button
-                    onClick={toggleFullscreen}
-                    className="bg-green-900/50 hover:bg-green-800/60 text-green-300 px-2 sm:px-4 py-1.5 sm:py-2 rounded-lg transition-colors flex items-center gap-1 sm:gap-2 border border-green-500/30 text-xs sm:text-sm"
-                  >
-                    {isFullscreen ? <Minimize2 className="w-3 h-3 sm:w-4 sm:h-4" /> : <Maximize2 className="w-3 h-3 sm:w-4 sm:h-4" />}
-                    <span className="hidden sm:inline">{isFullscreen ? t.exit : t.fullscreen}</span>
-                  </button>
-                  <button
-                    onClick={downloadImage}
-                    className="bg-gradient-to-r from-green-700/60 to-emerald-700/60 hover:from-green-600/70 hover:to-emerald-600/70 text-white px-2 sm:px-4 py-1.5 sm:py-2 rounded-lg transition-colors flex items-center gap-1 sm:gap-2 border border-green-400/40 font-semibold text-xs sm:text-sm"
-                  >
-                    <Download className="w-3 h-3 sm:w-4 sm:h-4" />
-                    <span className="hidden sm:inline">{t.download}</span>
-                  </button>
-                  <span className="bg-gradient-to-r from-green-900/60 to-emerald-900/60 text-green-300 font-bold px-2 sm:px-4 py-1.5 sm:py-2 rounded-lg ml-auto border border-green-500/30 text-xs sm:text-sm">
-                    {imageZoom}%
-                  </span>
                 </div>
 
-                {/* Image Container */}
-                <div className="flex-1 bg-gradient-to-br from-black/50 to-green-950/30 rounded-xl overflow-auto relative border border-green-500/20">
-                  <div className="min-h-full flex items-center justify-center p-2 sm:p-4">
-                    <img
-                      src={`data:image/png;base64,${currentImage}`}
-                      alt="Comparison chart"
-                      style={{
-                        transform: `scale(${imageZoom / 100})`,
-                        transformOrigin: 'center',
-                        transition: 'transform 0.2s ease-out',
-                        maxWidth: '100%',
-                        height: 'auto',
-                        cursor: 'zoom-in'
-                      }}
-                      onClick={toggleFullscreen}
-                    />
+                {imageLoading && !currentImage && (
+                  <div className="flex-1 flex items-center justify-center">
+                    <div className="text-center">
+                      <div className="text-4xl sm:text-6xl mb-4 animate-bounce">⚽</div>
+                      <Loader2 className="w-8 h-8 sm:w-12 sm:h-12 text-green-400 animate-spin mx-auto mb-4" />
+                      <p className="text-sm sm:text-base text-green-300 font-semibold">{t.analyzingData}</p>
+                      <p className="text-green-500/60 text-xs sm:text-sm mt-2">{t.crunchingNumbers} 📊</p>
+                    </div>
                   </div>
-                </div>
-              </>
+                )}
+
+                {currentImage && (
+                  <>
+                    {/* Zoom Controls */}
+                    <div className="flex flex-wrap gap-1 sm:gap-2 mb-3 sm:mb-4">
+                      <button
+                        onClick={handleZoomOut}
+                        disabled={imageZoom <= 50}
+                        className="bg-green-900/50 hover:bg-green-800/60 disabled:opacity-50 disabled:cursor-not-allowed text-green-300 px-2 sm:px-4 py-1.5 sm:py-2 rounded-lg transition-colors flex items-center gap-1 sm:gap-2 border border-green-500/30 text-xs sm:text-sm"
+                      >
+                        <ZoomOut className="w-3 h-3 sm:w-4 sm:h-4" />
+                        <span className="hidden sm:inline">{t.zoomOut}</span>
+                      </button>
+                      <button
+                        onClick={handleZoomIn}
+                        disabled={imageZoom >= 200}
+                        className="bg-green-900/50 hover:bg-green-800/60 disabled:opacity-50 disabled:cursor-not-allowed text-green-300 px-2 sm:px-4 py-1.5 sm:py-2 rounded-lg transition-colors flex items-center gap-1 sm:gap-2 border border-green-500/30 text-xs sm:text-sm"
+                      >
+                        <ZoomIn className="w-3 h-3 sm:w-4 sm:h-4" />
+                        <span className="hidden sm:inline">{t.zoomIn}</span>
+                      </button>
+                      <button
+                        onClick={toggleFullscreen}
+                        className="bg-green-900/50 hover:bg-green-800/60 text-green-300 px-2 sm:px-4 py-1.5 sm:py-2 rounded-lg transition-colors flex items-center gap-1 sm:gap-2 border border-green-500/30 text-xs sm:text-sm"
+                      >
+                        {isFullscreen ? <Minimize2 className="w-3 h-3 sm:w-4 sm:h-4" /> : <Maximize2 className="w-3 h-3 sm:w-4 sm:h-4" />}
+                        <span className="hidden sm:inline">{isFullscreen ? t.exit : t.fullscreen}</span>
+                      </button>
+                      <button
+                        onClick={downloadImage}
+                        className="bg-gradient-to-r from-green-700/60 to-emerald-700/60 hover:from-green-600/70 hover:to-emerald-600/70 text-white px-2 sm:px-4 py-1.5 sm:py-2 rounded-lg transition-colors flex items-center gap-1 sm:gap-2 border border-green-400/40 font-semibold text-xs sm:text-sm"
+                      >
+                        <Download className="w-3 h-3 sm:w-4 sm:h-4" />
+                        <span className="hidden sm:inline">{t.download}</span>
+                      </button>
+                      <span className="bg-gradient-to-r from-green-900/60 to-emerald-900/60 text-green-300 font-bold px-2 sm:px-4 py-1.5 sm:py-2 rounded-lg ml-auto border border-green-500/30 text-xs sm:text-sm">
+                        {imageZoom}%
+                      </span>
+                    </div>
+
+                    {/* Image Container */}
+                    <div className="flex-1 bg-black rounded-xl overflow-auto relative border border-green-500/20">
+                      <div className="min-h-full flex items-center justify-center p-2 sm:p-4">
+                        <img
+                          src={`data:image/png;base64,${currentImage}`}
+                          alt="Comparison chart"
+                          style={{
+                            transform: `scale(${imageZoom / 100})`,
+                            transformOrigin: 'center',
+                            transition: 'transform 0.2s ease-out',
+                            maxWidth: '100%',
+                            height: 'auto',
+                            cursor: 'zoom-in',
+                            backgroundColor: '#000'
+                          }}
+                          onClick={toggleFullscreen}
+                        />
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
             )}
           </div>
         )}
@@ -988,13 +996,13 @@ export default function Home() {
 
       {/* Fullscreen Modal */}
       {isFullscreen && currentImage && (
-        <div className="fullscreen-modal" onClick={toggleFullscreen}>
+        <div className="fixed inset-0 z-50 bg-black flex items-center justify-center p-4" onClick={toggleFullscreen}>
           <div
-            className="chart-wrapper flex flex-col bg-gradient-to-b from-gray-900/90 via-gray-900/95 to-black/95 border border-emerald-500/30 text-white"
+            className="w-full max-w-5xl flex flex-col bg-black border border-emerald-500/30 rounded-2xl text-white"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header with controls */}
-            <div className="flex items-center justify-between gap-3 p-4 border-b border-emerald-500/20 bg-black/40 backdrop-blur">
+            <div className="flex items-center justify-between gap-3 p-4 border-b border-emerald-500/20 bg-black">
               <h2 className="text-lg sm:text-xl font-bold text-green-200 flex items-center gap-2">
                 <span className="text-2xl">📊</span>
                 {t.matchAnalytics}
@@ -1021,7 +1029,7 @@ export default function Home() {
             </div>
 
             {/* Image container */}
-            <div className="chart-canvas flex-1 flex items-center justify-center">
+            <div className="chart-canvas flex-1 flex items-center justify-center bg-black">
               <div className="flex h-full w-full items-center justify-center overflow-auto p-4">
                 <img
                   src={`data:image/png;base64,${currentImage}`}
@@ -1037,7 +1045,7 @@ export default function Home() {
             </div>
 
             {/* Zoom controls */}
-            <div className="flex flex-wrap items-center justify-center gap-2 p-4 border-t border-emerald-500/20 bg-black/40 backdrop-blur">
+            <div className="flex flex-wrap items-center justify-center gap-2 p-4 border-t border-emerald-500/20 bg-black">
               <button
                 onClick={(e) => {
                   e.stopPropagation()
