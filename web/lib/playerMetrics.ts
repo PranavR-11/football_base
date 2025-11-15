@@ -116,6 +116,9 @@ const metricAliases: Record<string, MetricKey> = {
 
 const multiPlayerIndicators = [' vs ', ' vs. ', 'versus', 'compare', 'comparison']
 
+const chartColors = ['#34d399', '#f87171', '#60a5fa', '#facc15']
+export const DEFAULT_COMPARISON_METRICS: MetricKey[] = ['goals', 'assists', 'xg', 'npxg']
+
 export const createPlayerIndex = (store: PlayerMetricsStore): PlayerIndexEntry[] => {
   return Object.keys(store).map((name) => ({
     name,
@@ -192,16 +195,14 @@ export const buildLineChartData = (
 
   const labels = Array.from(seasonSet).sort((a, b) => seasonToNumber(a) - seasonToNumber(b))
 
-  const colors = ['#34d399', '#f472b6', '#60a5fa', '#facc15']
-
   const datasets = players.map((player, index) => {
     const playerEntries = sortSeasons(store[player] || [])
     const valueMap = new Map(playerEntries.map((entry) => [entry.season, entry[metric] ?? null]))
     return {
       label: `${player} — ${getMetricLabel(metric)}`,
       data: labels.map((label) => (valueMap.get(label) as number | null) ?? null),
-      borderColor: colors[index % colors.length],
-      backgroundColor: `${colors[index % colors.length]}33`,
+      borderColor: chartColors[index % chartColors.length],
+      backgroundColor: `${chartColors[index % chartColors.length]}33`,
       borderWidth: 2,
       pointRadius: 4,
       pointHoverRadius: 6,
@@ -222,29 +223,60 @@ const radarFields: { key: keyof PlayerSeasonEntry; label: string; cap: number }[
   { key: 'progressive_received', label: 'Prog. Received', cap: 300 }
 ]
 
-export const buildRadarData = (player: string, store: PlayerMetricsStore) => {
-  const rows = sortSeasons(store[player] || [])
-  if (!rows.length) return null
-  const latest = rows[rows.length - 1]
-
-  const labels = radarFields.map((field) => field.label)
-  const data = radarFields.map((field) => {
-    const raw = (latest[field.key] ?? 0) as number
-    const normalized = Math.min(100, Math.round((raw / field.cap) * 100))
-    return Number.isFinite(normalized) ? normalized : 0
-  })
-
-  return {
-    labels,
-    datasets: [
-      {
+export const buildRadarData = (players: string[], store: PlayerMetricsStore) => {
+  const datasets = players
+    .map((player, index) => {
+      const rows = sortSeasons(store[player] || [])
+      if (!rows.length) return null
+      const latest = rows[rows.length - 1]
+      const data = radarFields.map((field) => {
+        const raw = (latest[field.key] ?? 0) as number
+        const normalized = Math.min(100, Math.round((raw / field.cap) * 100))
+        return Number.isFinite(normalized) ? normalized : 0
+      })
+      return {
         label: player,
         data,
-        backgroundColor: 'rgba(52, 211, 153, 0.15)',
-        borderColor: '#34d399',
+        backgroundColor: `${chartColors[index % chartColors.length]}26`,
+        borderColor: chartColors[index % chartColors.length],
         borderWidth: 2,
-        pointBackgroundColor: '#34d399'
+        pointBackgroundColor: chartColors[index % chartColors.length]
       }
-    ]
+    })
+    .filter(Boolean)
+
+  if (!datasets.length) return null
+
+  return {
+    labels: radarFields.map((field) => field.label),
+    datasets
   }
 }
+
+export const buildHeadToHeadBarData = (
+  players: string[],
+  metrics: MetricKey[],
+  store: PlayerMetricsStore
+) => {
+  if (players.length < 2) return null
+  const labels = metrics.map((metric) => getMetricLabel(metric))
+  const datasets = players
+    .map((player, index) => {
+      const rows = sortSeasons(store[player] || [])
+      if (!rows.length) return null
+      const latest = rows[rows.length - 1]
+      return {
+        label: player,
+        data: metrics.map((metric) => (latest[metric] as number) ?? 0),
+        backgroundColor: `${chartColors[index % chartColors.length]}bb`
+      }
+    })
+    .filter(Boolean)
+
+  if (!datasets.length) return null
+
+  return { labels, datasets }
+}
+
+export const filterPlayersWithData = (players: string[], store: PlayerMetricsStore) =>
+  players.filter((player) => (store[player] || []).length)

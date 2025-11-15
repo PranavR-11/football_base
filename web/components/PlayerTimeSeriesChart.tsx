@@ -27,9 +27,11 @@ type Props = {
   metric: MetricKey
   store: PlayerMetricsStore
   generationKey: number
+  title?: string
+  subtitle?: string
 }
 
-const PlayerTimeSeriesChart = ({ players, metric, store, generationKey }: Props) => {
+const PlayerTimeSeriesChart = ({ players, metric, store, generationKey, title, subtitle }: Props) => {
   const hasData = players.some((player) => (store[player] || []).length > 0)
 
   const chartData = useMemo(() => {
@@ -77,14 +79,20 @@ const PlayerTimeSeriesChart = ({ players, metric, store, generationKey }: Props)
 
   if (!hasData) {
     return (
-      <div className="h-72 rounded-2xl border border-emerald-400/20 flex items-center justify-center text-emerald-100/70 text-sm text-center px-4">
+      <div className="h-72 rounded-2xl border border-emerald-400/25 bg-black/30 flex items-center justify-center text-emerald-100/70 text-sm text-center px-4">
         Mention a player included in the dataset to see trend lines for any stat.
       </div>
     )
   }
 
   return (
-    <div className="h-72 sm:h-80">
+    <div className="h-72 sm:h-80 rounded-2xl border border-emerald-400/25 bg-black/30 p-3 space-y-2">
+      {title && (
+        <div>
+          <p className="text-emerald-200/70 text-[10px] uppercase tracking-[0.4em]">{subtitle}</p>
+          <h4 className="text-white font-bold text-base sm:text-lg">{title}</h4>
+        </div>
+      )}
       <Line
         key={`${players.join('-')}-${metric}-${generationKey}`}
         data={chartData}

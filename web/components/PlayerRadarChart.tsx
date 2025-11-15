@@ -17,13 +17,16 @@ import { buildRadarData, PlayerMetricsStore } from '@/lib/playerMetrics'
 Chart.register(RadialLinearScale, LineElement, PointElement, Filler, Tooltip, Legend)
 
 type Props = {
-  player: string
+  players: string[]
   store: PlayerMetricsStore
   generationKey: number
 }
 
-const PlayerRadarChart = ({ player, store, generationKey }: Props) => {
-  const radarData = useMemo(() => buildRadarData(player, store), [player, store, generationKey])
+const PlayerRadarChart = ({ players, store, generationKey }: Props) => {
+  const radarData = useMemo(
+    () => buildRadarData(players, store),
+    [players, store, generationKey]
+  )
 
   const options = useMemo<ChartOptions<'radar'>>(
     () => ({
@@ -59,15 +62,15 @@ const PlayerRadarChart = ({ player, store, generationKey }: Props) => {
 
   if (!radarData) {
     return (
-      <div className="h-60 rounded-xl border border-emerald-400/30 flex items-center justify-center text-emerald-100/70 text-xs text-center px-4">
-        Need at least one recent season of data for {player} to show radar metrics.
+      <div className="h-60 rounded-2xl border border-emerald-400/25 bg-black/30 flex items-center justify-center text-emerald-100/70 text-xs text-center px-4">
+        Need at least one recent season of data for these players to show radar metrics.
       </div>
     )
   }
 
   return (
-    <div className="h-60 sm:h-72">
-      <Radar key={`${player}-radar-${generationKey}`} data={radarData} options={options} />
+    <div className="h-60 sm:h-72 rounded-2xl border border-emerald-400/25 bg-black/30 p-3">
+      <Radar key={`${players.join('-')}-radar-${generationKey}`} data={radarData} options={options} />
       <p className="text-emerald-100/70 text-[11px] mt-2 text-center">
         Normalized vs. elite thresholds — 100 = elite output
       </p>
