@@ -12,7 +12,19 @@ import {
 } from 'chart.js'
 import type { ChartOptions, Plugin } from 'chart.js'
 import { Radar } from 'react-chartjs-2'
-import { buildRadarData, PlayerMetricsStore } from '@/lib/playerMetrics'
+
+export type RadarPayload = {
+  metrics: string[]
+  players: string[]
+  percentiles: Record<string, number[]>
+  actual_values: Record<string, Record<string, number>>
+  seasons: Record<string, string | null>
+}
+
+type Props = {
+  payload: RadarPayload
+  generationKey: number
+}
 
 const radarLabelsPlugin: Plugin<'radar'> = {
   id: 'radarValueLabels',
@@ -26,7 +38,7 @@ const radarLabelsPlugin: Plugin<'radar'> = {
       const meta = chart.getDatasetMeta(datasetIndex)
       meta.data.forEach((point, index) => {
         const rawValue = dataset.data[index]
-        const numericValue = Number(rawValue)
+        const numericValue = typeof rawValue === 'number' ? rawValue : Number(rawValue)
         if (!Number.isFinite(numericValue)) return
         const { x, y } = point.tooltipPosition(false) as { x: number; y: number }
         ctx.fillStyle = 'rgba(255,255,255,0.9)'
@@ -39,17 +51,33 @@ const radarLabelsPlugin: Plugin<'radar'> = {
 
 Chart.register(RadialLinearScale, LineElement, PointElement, Filler, Tooltip, Legend, radarLabelsPlugin)
 
-type Props = {
-  players: string[]
-  store: PlayerMetricsStore
-  generationKey: number
-}
+const metricLabel = (metric: string) => metric.replace(/_/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase())
 
-const PlayerRadarChart = ({ players, store, generationKey }: Props) => {
-  const radarData = useMemo(
-    () => buildRadarData(players, store),
-    [players, store, generationKey]
-  )
+const chartColors = ['#FF6B6B', '#4ECDC4', '#FFD93D', '#A78BFA']
+
+const PlayerRadarChart = ({ payload, generationKey }: Props) => {
+  const chartData = useMemo(() => {
+    const labels = payload.metrics.map(metricLabel)
+    return {
+      labels,
+      datasets: payload.players.map((player, index) => {
+        const percentiles = payload.percentiles[player] || payload.metrics.map(() => 0)
+        const color = chartColors[index % chartColors.length]
+        return {
+          label: formatPlayerLabel(player, payload.seasons?.[player]),
+          data: percentiles,
+          borderColor: color,
+          backgroundColor: `${color}40`,
+          borderWidth: 3.5,
+          fill: true,
+          pointBackgroundColor: color,
+          pointBorderColor: '#fff',
+          pointRadius: 5,
+          pointHoverRadius: 7
+        }
+      })
+    }
+  }, [payload, generationKey])
 
   const options = useMemo<ChartOptions<'radar'>>(
     () => ({
@@ -63,7 +91,7 @@ const PlayerRadarChart = ({ players, store, generationKey }: Props) => {
         },
         title: {
           display: true,
-          text: 'Performance Radar (Percentiles + Actual)',
+          text: `Performance Radar — ${deriveSeason(payload.seasons)}`,
           color: '#e3fce8',
           font: { size: 14, weight: 'bold' }
         }
@@ -71,58 +99,51 @@ const PlayerRadarChart = ({ players, store, generationKey }: Props) => {
       scales: {
         r: {
           angleLines: { color: 'rgba(255,255,255,0.15)' },
-          grid: {
-            color: 'rgba(255,255,255,0.08)'
-          },
+          grid: { color: 'rgba(255,255,255,0.08)' },
           pointLabels: {
             color: '#bae6fd',
-            font: {
-              size: 12,
-              weight: 600
-            }
+            font: { size: 12, weight: 600 }
           },
-          ticks: {
-            display: false,
-            beginAtZero: true,
-            max: 100
-          }
+          ticks: { display: false, beginAtZero: true, max: 120 }
         }
       },
       elements: {
-        line: {
-          borderWidth: 3
-        },
-        point: {
-          radius: 5,
-          hoverRadius: 7
-        }
+        line: { borderWidth: 3 },
+        point: { radius: 5, hoverRadius: 7 }
       }
     }),
-    []
+    [payload]
   )
-
-  if (!radarData) {
-    return (
-      <div className="h-60 rounded-2xl border border-emerald-400/25 bg-black/30 flex items-center justify-center text-emerald-100/70 text-xs text-center px-4">
-        Need at least one recent season of data for these players to show radar metrics.
-      </div>
-    )
-  }
 
   return (
     <div className="h-60 sm:h-72 rounded-2xl border border-emerald-400/25 bg-black/30 p-3 flex flex-col">
       <div className="flex-1">
-        <Radar
-          key={`${players.join('-')}-radar-${generationKey}`}
-          data={radarData}
-          options={options}
-        />
+        <Radar key={`radar-${generationKey}`} data={chartData} options={options} />
       </div>
       <p className="text-emerald-100/70 text-[11px] mt-3 text-center">
         Normalized vs. elite thresholds — 100 = elite output
       </p>
     </div>
   )
+}
+
+function deriveSeason(seasons: Record<string, string | null>) {
+  const values = Object.values(seasons || {}).filter(Boolean)
+  if (!values.length) return 'Recent Seasons'
+  const unique = Array.from(new Set(values))
+  return unique.length === 1 ? unique[0] : 'Recent Seasons'
+}
+
+function formatPlayerLabel(player: string, season?: string | null) {
+  if (!season) return player
+  if (/^\d{4}$/.test(season)) {
+    const year = Number(season)
+    if (!Number.isNaN(year)) {
+      const next = (year + 1).toString().slice(-2)
+      return `${player} (${season.slice(-2)}-${next})`
+    }
+  }
+  return `${player} (${season})`
 }
 
 export default PlayerRadarChart
