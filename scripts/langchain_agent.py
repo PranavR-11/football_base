@@ -2405,6 +2405,14 @@ def plot_comprehensive_comparison(
                     fontsize=22, weight='bold', y=0.98, color='white')
 
         result = safe_save_plot(fig, fname)
+        CONTEXT["latest_radar_payload"] = {
+            "metrics": metrics_for_radar,
+            "players": players,
+            "percentiles": radar_percentiles,
+            "actual_values": radar_actual_values,
+            "seasons": radar_seasons,
+            "generated_at": time.time()
+        }
         plt.style.use('default')  # Reset to default style
         return result
 
@@ -2910,6 +2918,15 @@ def validate_and_plot_radar(players: List[str], metrics: List[str], seasons_back
     for p in players:
         if len(players_percentiles[p]) != len(metrics):
             players_percentiles[p] = [0.0] * len(metrics)
+
+    CONTEXT["latest_radar_payload"] = {
+        "metrics": metrics,
+        "players": players,
+        "percentiles": players_percentiles,
+        "actual_values": players_actual_values,
+        "seasons": players_seasons,
+        "generated_at": time.time()
+    }
 
     fname = f"group_radar_{int(time.time())}.png"
     try:

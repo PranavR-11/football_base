@@ -1,10 +1,9 @@
 'use client'
 
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { Send, Loader2, ZoomIn, ZoomOut, Maximize2, X, Minimize2, Download, Globe } from 'lucide-react'
 import MessageViewer from '@/components/MessageViewer'
-import PlayerInsightsPanel from '@/components/PlayerInsightsPanel'
-import { createPlayerIndex, PlayerIndexEntry, PlayerMetricsStore } from '@/lib/playerMetrics'
+import PlayerRadarChart, { RadarPayload } from '@/components/PlayerRadarChart'
 
 type Message = {
   id: string
@@ -309,9 +308,7 @@ export default function Home() {
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [generationKey, setGenerationKey] = useState(() => Date.now())
   const [scrollTargetId, setScrollTargetId] = useState<string | null>(null)
-  const [playerMetricsStore, setPlayerMetricsStore] = useState<PlayerMetricsStore>({})
-  const [playerIndex, setPlayerIndex] = useState<PlayerIndexEntry[]>([])
-  const [metricsLoading, setMetricsLoading] = useState(true)
+  const [radarPayload, setRadarPayload] = useState<RadarPayload | null>(null)
   const [language, setLanguage] = useState<Language>('en')
   const [videoStartTime, setVideoStartTime] = useState(0)
   const videoRef = useRef<HTMLVideoElement>(null)
@@ -324,16 +321,9 @@ export default function Home() {
   const reconnectAttemptsRef = useRef(0)
 
   const t = translations[language]
-  const latestAssistantMessage = useMemo(() => {
-    for (let i = messages.length - 1; i >= 0; i--) {
-      if (messages[i].type === 'assistant') {
-        return messages[i]
-      }
-    }
-    return null
-  }, [messages])
-  const hasInsights = !!latestAssistantMessage && !metricsLoading && playerIndex.length > 0
-  const showSideColumn = hasInsights || currentImage || imageLoading
+  const showRadarCard = !!radarPayload
+  const showImagePanel = !!(currentImage || imageLoading)
+  const showSideColumn = showRadarCard || showImagePanel
   const chatWidthClass = showSideColumn
     ? 'w-full lg:w-1/2'
     : messages.length === 0
@@ -376,34 +366,6 @@ export default function Home() {
   }, [messages])
 
   useEffect(() => {
-    let cancelled = false
-
-    const fetchMetrics = async () => {
-      try {
-        const response = await fetch('/data/player_metrics.json')
-        if (!response.ok) throw new Error('Failed to load player metrics')
-        const data: PlayerMetricsStore = await response.json()
-        if (!cancelled) {
-          setPlayerMetricsStore(data)
-          setPlayerIndex(createPlayerIndex(data))
-        }
-      } catch (error) {
-        console.error('Unable to load player metrics:', error)
-      } finally {
-        if (!cancelled) {
-          setMetricsLoading(false)
-        }
-      }
-    }
-
-    fetchMetrics()
-
-    return () => {
-      cancelled = true
-    }
-  }, [])
-
-  useEffect(() => {
     const connectWebSocket = () => {
       // Guard: if socket already exists and is open/connecting, skip creation
       if (wsRef.current &&
@@ -440,6 +402,11 @@ export default function Home() {
             return
           }
 
+          if (data.type === 'radar_data') {
+            setRadarPayload(data.payload as RadarPayload)
+            return
+          }
+
           if (data.type === 'text') {
             // Accumulate text lines into a single message
             if (!currentMessageIdRef.current) {
@@ -469,6 +436,10 @@ export default function Home() {
               ))
             }
           } else if (data.type === 'image') {
+            if (data.filename && data.filename.toLowerCase().includes('radar')) {
+              setImageLoading(false)
+              return
+            }
             setImageLoading(false)
             setCurrentImage(data.data)
             setMessages(prev => [
@@ -580,7 +551,7 @@ export default function Home() {
     // Store query in ref for comparison check
     lastQueryRef.current = query
     setGenerationKey(Date.now())
-
+    setRadarPayload(null)
     // Add user message (optimistic UI update)
     setMessages(prev => [
       ...prev,
@@ -879,19 +850,16 @@ export default function Home() {
         )}
 
         {showSideColumn && (
-          <div className="w-full lg:w-1/2 flex flex-col gap-4">
-            {hasInsights && latestAssistantMessage && (
-              <PlayerInsightsPanel
-                aiText={latestAssistantMessage.content}
-                generationKey={generationKey}
-                store={playerMetricsStore}
-                index={playerIndex}
-                loading={metricsLoading}
-              />
+          <div className="hidden lg:flex w-full lg:w-1/2 flex-col gap-4">
+            {showRadarCard && radarPayload && (
+              <PlayerRadarChart payload={radarPayload} generationKey={generationKey} />
             )}
 
-            {(currentImage || imageLoading) && (
-              <div className="hidden lg:flex w-full bg-gradient-to-br from-gray-900/40 via-green-950/50 to-gray-900/40 backdrop-blur-xl rounded-2xl sm:rounded-3xl shadow-2xl border-2 border-green-400/40 p-3 sm:p-6 flex-col" style={{ backdropFilter: 'blur(20px) saturate(180%)' }}>
+            {showImagePanel && (
+              <div
+                className="bg-gradient-to-br from-gray-900/40 via-green-950/50 to-gray-900/40 backdrop-blur-xl rounded-2xl sm:rounded-3xl shadow-2xl border-2 border-green-400/40 p-3 sm:p-6 flex-col"
+                style={{ backdropFilter: 'blur(20px) saturate(180%)' }}
+              >
                 <div className="flex items-center justify-between mb-3 sm:mb-4">
                   <h2 className="text-base sm:text-xl font-bold bg-gradient-to-r from-green-400 to-emerald-300 bg-clip-text text-transparent">📊 {t.matchAnalytics}</h2>
                   <button
@@ -919,7 +887,6 @@ export default function Home() {
 
                 {currentImage && (
                   <>
-                    {/* Zoom Controls */}
                     <div className="flex flex-wrap gap-1 sm:gap-2 mb-3 sm:mb-4">
                       <button
                         onClick={handleZoomOut}
@@ -956,8 +923,7 @@ export default function Home() {
                       </span>
                     </div>
 
-                    {/* Image Container */}
-                    <div className="flex-1 bg-black rounded-xl overflow-auto relative border border-green-500/20">
+                    <div className="flex-1 bg-gradient-to-br from-black/50 to-green-950/30 rounded-xl overflow-auto relative border border-green-500/20">
                       <div className="min-h-full flex items-center justify-center p-2 sm:p-4">
                         <img
                           src={`data:image/png;base64,${currentImage}`}
@@ -968,8 +934,7 @@ export default function Home() {
                             transition: 'transform 0.2s ease-out',
                             maxWidth: '100%',
                             height: 'auto',
-                            cursor: 'zoom-in',
-                            backgroundColor: '#000'
+                            cursor: 'zoom-in'
                           }}
                           onClick={toggleFullscreen}
                         />
@@ -981,6 +946,7 @@ export default function Home() {
             )}
           </div>
         )}
+
       </main>
 
       {/* Fullscreen Modal */}

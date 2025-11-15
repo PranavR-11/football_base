@@ -100,6 +100,9 @@ async def run_agent_query(query: str, session_context: dict) -> AsyncGenerator[d
     # Capture stdout to intercept agent output
     output_buffer = io.StringIO()
 
+    # Reset latest radar payload for this run
+    langchain_agent.CONTEXT.pop("latest_radar_payload", None)
+
     try:
         with redirect_stdout(output_buffer):
             # Call the agent (now with restored session context)
@@ -121,6 +124,13 @@ async def run_agent_query(query: str, session_context: dict) -> AsyncGenerator[d
                         "type": "text",
                         "content": clean_line
                     }
+
+        radar_payload = langchain_agent.CONTEXT.pop("latest_radar_payload", None)
+        if radar_payload:
+            yield {
+                "type": "radar_data",
+                "payload": radar_payload
+            }
 
         # Find newly created images
         current_images = set(glob.glob('*.png'))
