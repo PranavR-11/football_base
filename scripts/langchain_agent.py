@@ -1942,7 +1942,8 @@ def plot_group_radar(players: List[str], metric_labels: List[str], players_perce
 
     ax.set_ylim(0, 100)
     ax.grid(True, alpha=0.3, color='gray')
-    ax.legend(loc='upper right', bbox_to_anchor=(1.3, 1.1), fontsize=12, framealpha=0.9)
+    legend = ax.legend(loc='upper right', bbox_to_anchor=(1.3, 1.1), fontsize=12, framealpha=0.9, facecolor='#1a1a1a', edgecolor='white')
+    plt.setp(legend.get_texts(), color='white')
 
     # Different y-axis labels for single player vs comparison
     if is_single_player:
@@ -2150,9 +2151,10 @@ def plot_vs_comparison(
 
         ax_goals.set_xticks(yrs)
         ax_goals.set_xlabel("Season", fontsize=14, weight='bold')
-        ax_goals.set_ylabel("Goals", fontsize=14, weight='bold')
-        ax_goals.set_title("⚽ GOALS COMPARISON", fontsize=16, weight='bold', pad=15)
-        ax_goals.legend(loc='upper left', fontsize=12, framealpha=0.9)
+        ax_goals.set_ylabel("Goals", fontsize=14, weight='bold', color='white')
+        ax_goals.set_title("⚽ GOALS COMPARISON", fontsize=16, weight='bold', pad=15, color='white')
+        legend_goals = ax_goals.legend(loc='upper left', fontsize=12, framealpha=0.9, facecolor='#1a1a1a', edgecolor='white')
+        plt.setp(legend_goals.get_texts(), color='white')
         ax_goals.grid(True, alpha=0.3, linestyle='--')
         ax_goals.spines['top'].set_visible(False)
         ax_goals.spines['right'].set_visible(False)
@@ -2175,9 +2177,10 @@ def plot_vs_comparison(
 
         ax_assists.set_xticks(yrs)
         ax_assists.set_xlabel("Season", fontsize=14, weight='bold')
-        ax_assists.set_ylabel("Assists", fontsize=14, weight='bold')
-        ax_assists.set_title("🎯 ASSISTS COMPARISON", fontsize=16, weight='bold', pad=15)
-        ax_assists.legend(loc='upper left', fontsize=12, framealpha=0.9)
+        ax_assists.set_ylabel("Assists", fontsize=14, weight='bold', color='white')
+        ax_assists.set_title("🎯 ASSISTS COMPARISON", fontsize=16, weight='bold', pad=15, color='white')
+        legend_assists = ax_assists.legend(loc='upper left', fontsize=12, framealpha=0.9, facecolor='#1a1a1a', edgecolor='white')
+        plt.setp(legend_assists.get_texts(), color='white')
         ax_assists.grid(True, alpha=0.3, linestyle='--')
         ax_assists.spines['top'].set_visible(False)
         ax_assists.spines['right'].set_visible(False)
@@ -2251,7 +2254,8 @@ def plot_comprehensive_comparison(
         ax_goals.set_xlabel('Season', fontweight='bold', fontsize=16, color='white')
         ax_goals.set_ylabel('Goals', fontweight='bold', fontsize=16, color='white')
         ax_goals.set_title('⚽ GOALS COMPARISON', fontweight='bold', fontsize=18, pad=20, color='white')
-        ax_goals.legend(fontsize=14, loc='best', framealpha=0.9)
+        legend_g = ax_goals.legend(fontsize=14, loc='best', framealpha=0.9, facecolor='#1a1a1a', edgecolor='white')
+        plt.setp(legend_g.get_texts(), color='white')
         ax_goals.grid(True, alpha=0.2, color='gray')
         ax_goals.tick_params(colors='white', labelsize=12)
 
@@ -2275,7 +2279,8 @@ def plot_comprehensive_comparison(
         ax_assists.set_xlabel('Season', fontweight='bold', fontsize=16, color='white')
         ax_assists.set_ylabel('Assists', fontweight='bold', fontsize=16, color='white')
         ax_assists.set_title('🎯 ASSISTS COMPARISON', fontweight='bold', fontsize=18, pad=20, color='white')
-        ax_assists.legend(fontsize=14, loc='best', framealpha=0.9)
+        legend_a = ax_assists.legend(fontsize=14, loc='best', framealpha=0.9, facecolor='#1a1a1a', edgecolor='white')
+        plt.setp(legend_a.get_texts(), color='white')
         ax_assists.grid(True, alpha=0.2, color='gray')
         ax_assists.tick_params(colors='white', labelsize=12)
 
@@ -2349,7 +2354,8 @@ def plot_comprehensive_comparison(
         # Increase ylim to accommodate label offsets
         ax_radar.set_ylim(0, 140)
         ax_radar.grid(True, alpha=0.3, color='gray')
-        ax_radar.legend(loc='upper right', bbox_to_anchor=(1.35, 1.15), fontsize=12, framealpha=0.9)
+        legend_r = ax_radar.legend(loc='upper right', bbox_to_anchor=(1.35, 1.15), fontsize=12, framealpha=0.9, facecolor='#1a1a1a', edgecolor='white')
+        plt.setp(legend_r.get_texts(), color='white')
         ax_radar.set_yticks([25, 50, 75, 100])
         ax_radar.set_yticklabels(['25%', '50%', '75%', '100%'], fontsize=11, color='white')
         ax_radar.tick_params(colors='white')
@@ -2395,7 +2401,8 @@ def plot_comprehensive_comparison(
         ax_bar.set_xticks(x)
         ax_bar.set_xticklabels([m.replace('_', ' ').title() for m in metrics_for_bar],
                                rotation=20, ha='right', fontsize=12, color='white')
-        ax_bar.legend(fontsize=13, framealpha=0.9)
+        legend = ax_bar.legend(fontsize=13, framealpha=0.9, facecolor='#1a1a1a', edgecolor='white')
+        plt.setp(legend.get_texts(), color='white')
         ax_bar.grid(axis='y', alpha=0.2, color='gray')
         ax_bar.tick_params(colors='white', labelsize=12)
 
@@ -2541,10 +2548,17 @@ def humanize_aggregate_for_year(resp: dict, year: int) -> Optional[str]:
 def choose_chart_type(players: List[str], metrics: List[str], data_summary: Dict[str, Any]) -> str:
     if not metrics or not players:
         return "fallback_text"
+
+    # For single players, prefer radar to show comprehensive profile
+    # (radar works better with 3+ metrics)
+    if len(players) == 1 and len(metrics) >= 1:
+        return "radar"
+
+    # For multiple players
     if len(metrics) == 1:
-        return "group_timeseries" if len(players) > 1 else "timeseries"
+        return "group_timeseries"
     if len(metrics) == 2:
-        return "group_bar" if len(players) > 1 else "timeseries_multimetric"
+        return "group_bar"
     if len(metrics) >= 3:
         return "radar"
     return "fallback_text"
@@ -3594,13 +3608,15 @@ def handle_input(text: str):
                         offset = (i - len(players)/2 + 0.5) * width
                         ax.bar(x + offset, values, width, label=player, color=colors[i % len(colors)])
 
-                    ax.set_xlabel('Metrics', fontweight='bold', fontsize=12)
-                    ax.set_ylabel('Value', fontweight='bold', fontsize=12)
-                    ax.set_title('📊 Head-to-Head Stats Comparison (24-25)', fontweight='bold', fontsize=14)
+                    ax.set_xlabel('Metrics', fontweight='bold', fontsize=12, color='white')
+                    ax.set_ylabel('Value', fontweight='bold', fontsize=12, color='white')
+                    ax.set_title('📊 Head-to-Head Stats Comparison (24-25)', fontweight='bold', fontsize=14, color='white')
                     ax.set_xticks(x)
-                    ax.set_xticklabels([m.replace('_', ' ').title() for m in metrics_to_compare[:4]], rotation=15, ha='right')
-                    ax.legend()
+                    ax.set_xticklabels([m.replace('_', ' ').title() for m in metrics_to_compare[:4]], rotation=15, ha='right', color='white')
+                    legend_hth = ax.legend(facecolor='#1a1a1a', edgecolor='white', framealpha=0.9)
+                    plt.setp(legend_hth.get_texts(), color='white')
                     ax.grid(axis='y', alpha=0.3)
+                    ax.tick_params(colors='white')
 
                     bar_path = f"comparison_bars_{int(time.time())}.png"
                     safe_save_plot(fig, bar_path)
@@ -4119,9 +4135,11 @@ IMPORTANT: Use plain text only. Do NOT use markdown formatting like ** for bold 
                 ax.bar(inds - w/2, vals1, width=w, label=metric1)
                 ax.bar(inds + w/2, vals2, width=w, label=metric2)
                 ax.set_xticks(inds)
-                ax.set_xticklabels(players, rotation=45, ha='right')
-                ax.set_title(f"Latest-season comparison: {metric1} vs {metric2}")
-                ax.legend()
+                ax.set_xticklabels(players, rotation=45, ha='right', color='white')
+                ax.set_title(f"Latest-season comparison: {metric1} vs {metric2}", color='white')
+                legend_ls = ax.legend(facecolor='#1a1a1a', edgecolor='white', framealpha=0.9)
+                plt.setp(legend_ls.get_texts(), color='white')
+                ax.tick_params(colors='white')
                 pname = f"group_bar_{int(time.time())}.png"
                 safe_save_plot(fig, pname)
                 print("Plot saved to", pname)

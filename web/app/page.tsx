@@ -782,7 +782,7 @@ export default function Home() {
                   <div
                     className={`${
                       msg.type === 'user' ? 'max-w-[85%] sm:max-w-lg' : 'max-w-[95%] sm:max-w-4xl'
-                    } px-4 sm:px-6 py-3 sm:py-4 rounded-xl sm:rounded-2xl shadow-lg ${
+                    } px-3 sm:px-4 py-2 sm:py-3 rounded-lg sm:rounded-xl shadow-lg ${
                       msg.type === 'user'
                         ? 'bg-gradient-to-br from-green-600 to-emerald-700 text-white border border-green-400/30'
                         : 'bg-gradient-to-br from-gray-800/90 to-green-900/60 text-white backdrop-blur-sm border border-green-500/20'
