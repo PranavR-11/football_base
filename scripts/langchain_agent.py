@@ -4092,6 +4092,14 @@ IMPORTANT: Use plain text only. Do NOT use markdown formatting like ** for bold 
             else:
                 dbg("aggregate_mcp did not return found for %s: %s", players[0], res)
 
+        # For search queries with players but no metrics, add default metrics to generate charts
+        if intent == "search" and players and len(metrics) == 0:
+            dbg("Search query with players but no metrics - adding defaults for chart generation")
+            available_cols = get_available_columns()
+            metrics = choose_default_metrics_for_players(players, rag_hits or [], available_cols)
+            if metrics and len(metrics) >= 2:
+                dbg("Added default metrics for chart: %s", metrics)
+
         # If plotting requested
         if intent in ("plot", "compare") or (intent == "search" and len(metrics) >= 1):
             chart_type = choose_chart_type(players, metrics, {})
