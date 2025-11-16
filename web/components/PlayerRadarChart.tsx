@@ -91,9 +91,10 @@ const PlayerRadarChart = ({ payload, generationKey }: Props) => {
 
   const maxValue = useMemo(() => {
     // If actual_values_array exists, use it; otherwise fall back to percentile scale
-    if (payload.actual_values_array) {
+    const actualValuesArray = payload.actual_values_array
+    if (actualValuesArray) {
       const allValues = payload.players.flatMap(
-        (player) => payload.actual_values_array[player] || []
+        (player) => actualValuesArray[player] || []
       )
       const max = Math.max(...allValues.filter(Number.isFinite), 1)
       return Math.ceil(max * 1.2) // Add 20% padding
