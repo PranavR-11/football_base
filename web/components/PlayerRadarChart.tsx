@@ -18,6 +18,7 @@ export type RadarPayload = {
   players: string[]
   percentiles: Record<string, number[]>
   actual_values: Record<string, Record<string, number>>
+  actual_values_array: Record<string, number[]>
   seasons: Record<string, string | null>
 }
 
@@ -61,11 +62,11 @@ const PlayerRadarChart = ({ payload, generationKey }: Props) => {
     return {
       labels,
       datasets: payload.players.map((player, index) => {
-        const percentiles = payload.percentiles[player] || payload.metrics.map(() => 0)
+        const actualValues = payload.actual_values_array[player] || payload.metrics.map(() => 0)
         const color = chartColors[index % chartColors.length]
         return {
           label: formatPlayerLabel(player, payload.seasons?.[player]),
-          data: percentiles,
+          data: actualValues,
           borderColor: color,
           backgroundColor: `${color}40`,
           borderWidth: 3.5,
@@ -78,6 +79,14 @@ const PlayerRadarChart = ({ payload, generationKey }: Props) => {
       })
     }
   }, [payload, generationKey])
+
+  const maxValue = useMemo(() => {
+    const allValues = payload.players.flatMap(
+      (player) => payload.actual_values_array[player] || []
+    )
+    const max = Math.max(...allValues.filter(Number.isFinite), 1)
+    return Math.ceil(max * 1.2) // Add 20% padding
+  }, [payload])
 
   const options = useMemo<ChartOptions<'radar'>>(
     () => ({
@@ -104,7 +113,14 @@ const PlayerRadarChart = ({ payload, generationKey }: Props) => {
             color: '#bae6fd',
             font: { size: 12, weight: 600 }
           },
-          ticks: { display: false, beginAtZero: true, max: 120 }
+          ticks: {
+            display: true,
+            beginAtZero: true,
+            max: maxValue,
+            color: 'rgba(186, 230, 253, 0.6)',
+            backdropColor: 'transparent',
+            font: { size: 10 }
+          }
         }
       },
       elements: {
@@ -112,7 +128,7 @@ const PlayerRadarChart = ({ payload, generationKey }: Props) => {
         point: { radius: 5, hoverRadius: 7 }
       }
     }),
-    [payload]
+    [payload, maxValue]
   )
 
   return (
@@ -121,7 +137,7 @@ const PlayerRadarChart = ({ payload, generationKey }: Props) => {
         <Radar key={`radar-${generationKey}`} data={chartData} options={options} />
       </div>
       <p className="text-emerald-100/70 text-[11px] mt-3 text-center">
-        Normalized vs. elite thresholds — 100 = elite output
+        Raw stat values — {deriveSeason(payload.seasons)}
       </p>
     </div>
   )

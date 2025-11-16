@@ -2839,9 +2839,10 @@ def calculate_radar_data(players: List[str], metrics: List[str], seasons_back: i
         try:
             flt = filter_players_mcp(team=None, position=None, seasons_back=seasons_back)
             if isinstance(flt, dict) and flt.get("players"):
-                cohort = flt.get("players")[:200]
+                # CRITICAL FIX: Limit cohort to 30 players instead of 200 to prevent infinite loops
+                cohort = flt.get("players")[:30]
             elif isinstance(flt, list) and flt:
-                cohort = flt[:200]
+                cohort = flt[:30]
         except Exception as e:
             dbg("cohort fetch failed: %s", e)
             cohort = None
@@ -2933,11 +2934,21 @@ def validate_and_plot_radar(players: List[str], metrics: List[str], seasons_back
         if len(players_percentiles[p]) != len(metrics):
             players_percentiles[p] = [0.0] * len(metrics)
 
+    # Convert actual_values dict-of-dicts to dict-of-arrays for Chart.js
+    actual_values_array = {}
+    for player in players:
+        player_values = []
+        for metric in metrics:
+            val = players_actual_values.get(player, {}).get(metric, 0)
+            player_values.append(val)
+        actual_values_array[player] = player_values
+
     CONTEXT["latest_radar_payload"] = {
         "metrics": metrics,
         "players": players,
         "percentiles": players_percentiles,
         "actual_values": players_actual_values,
+        "actual_values_array": actual_values_array,
         "seasons": players_seasons,
         "generated_at": time.time()
     }
