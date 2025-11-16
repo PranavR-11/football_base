@@ -3574,8 +3574,8 @@ def handle_input(text: str):
                                 charts_created.append((metric, path))
                                 # Chart generated successfully - sent via WebSocket
 
-                # DEFAULT: Generate radar chart for multi-player comparison
-                if len(metrics_to_compare) >= 3 and user_requested_viz in ["auto", "radar", "both"]:
+                # DEFAULT: Generate radar chart ONLY for single player
+                if len(players) == 1 and len(metrics_to_compare) >= 3 and user_requested_viz in ["auto", "radar", "both"]:
                     radar_path = validate_and_plot_radar(players, metrics_to_compare[:6], seasons_for_query, text)
                     if radar_path:
                         charts_created.append(("radar", radar_path))
