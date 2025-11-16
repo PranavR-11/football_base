@@ -14,6 +14,23 @@ type MessageViewerProps = {
   className?: string
 }
 
+const convertAllCapsToHeaders = (text: string) => {
+  // Split by lines and detect all-caps headings
+  const lines = text.split('\n')
+  const processed = lines.map(line => {
+    const trimmed = line.trim()
+    // Check if line is all caps (allowing spaces, numbers, and common punctuation)
+    // Must be at least 3 chars and mostly uppercase letters
+    if (trimmed.length >= 3 && /^[A-Z0-9\s\-:&]+$/.test(trimmed) && /[A-Z]{3,}/.test(trimmed)) {
+      // Don't convert if it's part of a sentence (has lowercase after it in the same line)
+      // Convert to markdown heading
+      return `## ${trimmed}`
+    }
+    return line
+  })
+  return processed.join('\n')
+}
+
 const unescapeMarkdown = (text: string) =>
   text
     .replace(/\\\*/g, '*')
@@ -105,7 +122,7 @@ const MessageViewer = ({
           )
         }}
       >
-        {unescapeMarkdown(message ?? '')}
+        {unescapeMarkdown(convertAllCapsToHeaders(message ?? ''))}
       </ReactMarkdown>
     </div>
   )
