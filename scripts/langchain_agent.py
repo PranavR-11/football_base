@@ -2560,7 +2560,11 @@ def choose_chart_type(players: List[str], metrics: List[str], data_summary: Dict
     if len(metrics) == 2:
         return "group_bar"
     if len(metrics) >= 3:
-        return "radar"
+        # Radar for 3+ players, but NOT 2-player comparisons (use comparison charts instead)
+        if len(players) != 2:
+            return "radar"
+        # For 2-player comparisons, let the comparison handler take over
+        return "fallback_text"
     return "fallback_text"
 
 # ---------------- Interactive slot manager ----------------
