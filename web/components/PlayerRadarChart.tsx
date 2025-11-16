@@ -18,7 +18,7 @@ export type RadarPayload = {
   players: string[]
   percentiles: Record<string, number[]>
   actual_values: Record<string, Record<string, number>>
-  actual_values_array: Record<string, number[]>
+  actual_values_array?: Record<string, number[]>  // Optional for backward compatibility
   seasons: Record<string, string | null>
 }
 
@@ -62,7 +62,8 @@ const PlayerRadarChart = ({ payload, generationKey }: Props) => {
     return {
       labels,
       datasets: payload.players.map((player, index) => {
-        const actualValues = payload.actual_values_array[player] || payload.metrics.map(() => 0)
+        // Fallback: if actual_values_array is missing (old backend), use percentiles
+        const actualValues = payload.actual_values_array?.[player] || payload.percentiles[player] || payload.metrics.map(() => 0)
         const color = chartColors[index % chartColors.length]
         return {
           label: formatPlayerLabel(player, payload.seasons?.[player]),
@@ -81,11 +82,15 @@ const PlayerRadarChart = ({ payload, generationKey }: Props) => {
   }, [payload, generationKey])
 
   const maxValue = useMemo(() => {
-    const allValues = payload.players.flatMap(
-      (player) => payload.actual_values_array[player] || []
-    )
-    const max = Math.max(...allValues.filter(Number.isFinite), 1)
-    return Math.ceil(max * 1.2) // Add 20% padding
+    // If actual_values_array exists, use it; otherwise fall back to percentile scale
+    if (payload.actual_values_array) {
+      const allValues = payload.players.flatMap(
+        (player) => payload.actual_values_array[player] || []
+      )
+      const max = Math.max(...allValues.filter(Number.isFinite), 1)
+      return Math.ceil(max * 1.2) // Add 20% padding
+    }
+    return 120 // Fallback to percentile scale (0-100)
   }, [payload])
 
   const options = useMemo<ChartOptions<'radar'>>(
