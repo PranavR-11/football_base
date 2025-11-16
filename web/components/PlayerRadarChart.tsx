@@ -32,7 +32,7 @@ const radarLabelsPlugin: Plugin<'radar'> = {
   afterDatasetsDraw(chart) {
     const { ctx } = chart
     ctx.save()
-    ctx.font = '600 10px Inter, system-ui, sans-serif'
+    ctx.font = 'bold 12px Inter, system-ui, sans-serif'
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
     chart.data.datasets.forEach((dataset, datasetIndex) => {
@@ -42,8 +42,16 @@ const radarLabelsPlugin: Plugin<'radar'> = {
         const numericValue = typeof rawValue === 'number' ? rawValue : Number(rawValue)
         if (!Number.isFinite(numericValue)) return
         const { x, y } = point.tooltipPosition(false) as { x: number; y: number }
-        ctx.fillStyle = 'rgba(255,255,255,0.9)'
-        ctx.fillText(`${Math.round(numericValue)}`, x, y - 6)
+
+        // Draw background for better visibility
+        const text = `${Math.round(numericValue)}`
+        const textWidth = ctx.measureText(text).width
+        ctx.fillStyle = 'rgba(0,0,0,0.7)'
+        ctx.fillRect(x - textWidth / 2 - 4, y - 14, textWidth + 8, 20)
+
+        // Draw text
+        ctx.fillStyle = '#ffffff'
+        ctx.fillText(text, x, y - 4)
       })
     })
     ctx.restore()
@@ -112,19 +120,21 @@ const PlayerRadarChart = ({ payload, generationKey }: Props) => {
       },
       scales: {
         r: {
-          angleLines: { color: 'rgba(255,255,255,0.15)' },
-          grid: { color: 'rgba(255,255,255,0.08)' },
+          angleLines: { color: 'rgba(255,255,255,0.2)' },
+          grid: { color: 'rgba(255,255,255,0.12)' },
           pointLabels: {
-            color: '#bae6fd',
-            font: { size: 12, weight: 600 }
+            color: '#e0f2fe',
+            font: { size: 13, weight: 700 },
+            padding: 8
           },
           ticks: {
             display: true,
             beginAtZero: true,
             max: maxValue,
-            color: 'rgba(186, 230, 253, 0.6)',
-            backdropColor: 'transparent',
-            font: { size: 10 }
+            color: 'rgba(186, 230, 253, 0.8)',
+            backdropColor: 'rgba(0,0,0,0.5)',
+            backdropPadding: 2,
+            font: { size: 10, weight: 600 }
           }
         }
       },
