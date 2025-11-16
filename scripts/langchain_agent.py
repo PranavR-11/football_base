@@ -1507,9 +1507,9 @@ def parse_intent_with_llm(query: str) -> Dict[str, Any]:
 # ---------------- Metric defaults by position ----------------
 POS_DEFAULT_METRICS = {
     "fw": ["goals", "assists", "xg", "npxg", "progressive_carries", "progressive_passes"],
-    "mf": ["goals", "assists", "progressive_passes", "progressive_carries", "xg", "npxg"],
-    "df": ["tackles", "interceptions", "blocks", "progressive_passes", "progressive_carries", "aerials_won"],
-    "gk": ["saves", "clean_sheets", "save_pct", "goals_against", "post_shot_xg", "psxg_net"],
+    "mf": ["goals", "assists", "progressive_passes", "progressive_carries", "xg", "xag"],
+    "df": ["progressive_passes", "progressive_carries", "progressive_received", "assists", "yellow_cards", "red_cards"],
+    "gk": ["playing_time_starts", "playing_time_min", "playing_time_90s", "goals_assists", "yellow_cards", "red_cards"],
 }
 
 def infer_position_from_rag(rag_hits: List[Dict[str, Any]]) -> Optional[str]:
