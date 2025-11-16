@@ -20,18 +20,28 @@ const convertAllCapsToHeaders = (text: string) => {
   const processed = lines.map(line => {
     const trimmed = line.trim()
 
-    // Pattern 1: ALL-CAPS headings (e.g., "OVERVIEW", "GOAL SCORING VS PLAYMAKING")
-    if (trimmed.length >= 3 && /^[A-Z0-9\s\-:&]+$/.test(trimmed) && /[A-Z]{3,}/.test(trimmed)) {
+    // Pattern 1: ALL-CAPS heading with colon (e.g., "CAREER OVERVIEW: rest of text")
+    // Extract just the heading part before the colon
+    const capsWithColonMatch = trimmed.match(/^([A-Z0-9\s\-&]{3,50}):\s*(.+)$/)
+    if (capsWithColonMatch && /[A-Z]{3,}/.test(capsWithColonMatch[1])) {
+      return `## ${capsWithColonMatch[1]}\n\n${capsWithColonMatch[2]}`
+    }
+
+    // Pattern 2: Standalone ALL-CAPS headings (short lines only, no colon)
+    if (trimmed.length >= 3 && trimmed.length <= 50 &&
+        /^[A-Z0-9\s\-&]+$/.test(trimmed) &&
+        /[A-Z]{3,}/.test(trimmed) &&
+        !trimmed.includes(':')) {
       return `## ${trimmed}`
     }
 
-    // Pattern 2: Numbered headings (e.g., "1. Career Overview", "2. Playing Style")
+    // Pattern 3: Numbered headings (e.g., "1. Career Overview", "2. Playing Style")
     const numberedMatch = trimmed.match(/^(\d+)\.\s+(.+)$/)
-    if (numberedMatch && numberedMatch[2].length >= 3) {
+    if (numberedMatch && numberedMatch[2].length >= 3 && numberedMatch[2].length <= 50) {
       return `## ${numberedMatch[2].toUpperCase()}`
     }
 
-    // Pattern 3: Bold headings at start of line (e.g., "**Career Overview**")
+    // Pattern 4: Bold headings at start of line (e.g., "**Career Overview**")
     const boldMatch = trimmed.match(/^\*\*([^*]+)\*\*:?\s*$/)
     if (boldMatch && boldMatch[1].length >= 3) {
       return `## ${boldMatch[1].toUpperCase()}`
