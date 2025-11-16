@@ -15,17 +15,28 @@ type MessageViewerProps = {
 }
 
 const convertAllCapsToHeaders = (text: string) => {
-  // Split by lines and detect all-caps headings
+  // Split by lines and detect various heading patterns
   const lines = text.split('\n')
   const processed = lines.map(line => {
     const trimmed = line.trim()
-    // Check if line is all caps (allowing spaces, numbers, and common punctuation)
-    // Must be at least 3 chars and mostly uppercase letters
+
+    // Pattern 1: ALL-CAPS headings (e.g., "OVERVIEW", "GOAL SCORING VS PLAYMAKING")
     if (trimmed.length >= 3 && /^[A-Z0-9\s\-:&]+$/.test(trimmed) && /[A-Z]{3,}/.test(trimmed)) {
-      // Don't convert if it's part of a sentence (has lowercase after it in the same line)
-      // Convert to markdown heading
       return `## ${trimmed}`
     }
+
+    // Pattern 2: Numbered headings (e.g., "1. Career Overview", "2. Playing Style")
+    const numberedMatch = trimmed.match(/^(\d+)\.\s+(.+)$/)
+    if (numberedMatch && numberedMatch[2].length >= 3) {
+      return `## ${numberedMatch[2].toUpperCase()}`
+    }
+
+    // Pattern 3: Bold headings at start of line (e.g., "**Career Overview**")
+    const boldMatch = trimmed.match(/^\*\*([^*]+)\*\*:?\s*$/)
+    if (boldMatch && boldMatch[1].length >= 3) {
+      return `## ${boldMatch[1].toUpperCase()}`
+    }
+
     return line
   })
   return processed.join('\n')
