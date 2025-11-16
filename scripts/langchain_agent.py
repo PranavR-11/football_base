@@ -3399,7 +3399,7 @@ def handle_input(text: str):
                                 assists_data[player] = values
 
                             stats_dict = {}
-                            for metric in metrics_to_compare[:4]:
+                            for metric in metrics_to_compare[:6]:
                                 resp = aggregate_mcp(player, stat=metric, seasons_back=1)
                                 if isinstance(resp, dict) and resp.get("found"):
                                     per = resp.get("per_season") or []
@@ -3539,7 +3539,7 @@ def handle_input(text: str):
                                 # Only include first 4 metrics for bar chart
                                 bar_chart_data[player_name] = {
                                     m: latest_stats.get(m, 0)
-                                    for m in metrics_to_compare[:4]
+                                    for m in metrics_to_compare[:6]
                                     if m in latest_stats
                                 }
 
@@ -3619,12 +3619,12 @@ def handle_input(text: str):
                         player_stats[player] = stats_dict
 
                     # Create grouped bar chart
-                    x = np.arange(len(metrics_to_compare[:4]))
+                    x = np.arange(len(metrics_to_compare[:6]))
                     width = 0.35 if len(players) == 2 else 0.25
                     colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728']
 
                     for i, player in enumerate(players[:4]):
-                        values = [player_stats[player].get(m, 0) for m in metrics_to_compare[:4]]
+                        values = [player_stats[player].get(m, 0) for m in metrics_to_compare[:6]]
                         offset = (i - len(players)/2 + 0.5) * width
                         ax.bar(x + offset, values, width, label=player, color=colors[i % len(colors)])
 
@@ -3632,7 +3632,7 @@ def handle_input(text: str):
                     ax.set_ylabel('Value', fontweight='bold', fontsize=12, color='white')
                     ax.set_title('📊 Head-to-Head Stats Comparison (24-25)', fontweight='bold', fontsize=14, color='white')
                     ax.set_xticks(x)
-                    ax.set_xticklabels([m.replace('_', ' ').title() for m in metrics_to_compare[:4]], rotation=15, ha='right', color='white')
+                    ax.set_xticklabels([m.replace('_', ' ').title() for m in metrics_to_compare[:6]], rotation=15, ha='right', color='white')
                     legend_hth = ax.legend(facecolor='#1a1a1a', edgecolor='white', framealpha=0.9)
                     plt.setp(legend_hth.get_texts(), color='white')
                     ax.grid(axis='y', alpha=0.3)
