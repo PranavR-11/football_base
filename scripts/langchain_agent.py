@@ -3348,10 +3348,15 @@ def handle_input(text: str):
         if intent == "compare" and len(players) >= 2:
             dbg("User requesting comprehensive comparison of %d players: %s", len(players), players)
 
-            # Key metrics to compare
+            # Key metrics to compare (ensure all 6 are normalized correctly)
             key_metrics = ["goals", "assists", "xg", "npxg", "progressive_carries", "progressive_passes"]
             available_cols = get_available_columns()
-            metrics_to_compare = [normalize_metric_token(m, available_cols) for m in key_metrics if normalize_metric_token(m, available_cols)]
+            metrics_to_compare = []
+            for m in key_metrics:
+                normalized = normalize_metric_token(m, available_cols)
+                if normalized:
+                    metrics_to_compare.append(normalized)
+            dbg("Normalized metrics for comparison: %s (from %s)", metrics_to_compare, key_metrics)
 
             charts_created = []
 
