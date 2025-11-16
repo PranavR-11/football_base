@@ -3758,13 +3758,12 @@ IMPORTANT: Use plain text only. Do NOT use markdown formatting like ** for bold 
                 # Generate radar chart for single player queries
                 if players and len(players) == 1:
                     try:
-                        # Get key metrics for the player
-                        key_metrics = ["goals", "assists", "xg", "npxg", "progressive_carries", "progressive_passes"]
+                        # Get position-specific metrics for the player
                         available_cols = get_available_columns()
-                        metrics_to_chart = [normalize_metric_token(m, available_cols) for m in key_metrics if normalize_metric_token(m, available_cols)]
+                        metrics_to_chart = choose_default_metrics_for_players(players, rag_hits or [], available_cols)
 
-                        if len(metrics_to_chart) >= 3:
-                            dbg("Generating radar chart for single player: %s", players[0])
+                        if metrics_to_chart and len(metrics_to_chart) >= 3:
+                            dbg("Generating radar chart for single player %s with metrics: %s", players[0], metrics_to_chart)
                             radar_path = validate_and_plot_radar(players, metrics_to_chart[:6], seasons_for_query, text)
                             # Chart is generated silently - no need to print the path
                     except Exception as e:
