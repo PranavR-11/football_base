@@ -147,11 +147,11 @@ const PlayerRadarChart = ({ payload, generationKey }: Props) => {
   )
 
   return (
-    <div className="h-60 sm:h-72 rounded-2xl border border-emerald-400/25 bg-black/30 p-3 flex flex-col">
-      <div className="flex-1">
+    <div className="w-full flex flex-col">
+      <div className="w-full" style={{ height: '400px' }}>
         <Radar key={`radar-${generationKey}`} data={chartData} options={options} />
       </div>
-      <p className="text-emerald-100/70 text-[11px] mt-3 text-center">
+      <p className="text-emerald-100/70 text-xs mt-4 text-center font-semibold">
         Raw stat values — {deriveSeason(payload.seasons)}
       </p>
     </div>

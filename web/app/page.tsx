@@ -852,7 +852,61 @@ export default function Home() {
         {showSideColumn && (
           <div className="hidden lg:flex w-full lg:w-1/2 flex-col gap-4">
             {showRadarCard && radarPayload && (
-              <PlayerRadarChart payload={radarPayload} generationKey={generationKey} />
+              <div
+                className="bg-gradient-to-br from-gray-900/40 via-green-950/50 to-gray-900/40 backdrop-blur-xl rounded-2xl sm:rounded-3xl shadow-2xl border-2 border-green-400/40 p-3 sm:p-6 flex flex-col h-full"
+                style={{ backdropFilter: 'blur(20px) saturate(180%)' }}
+              >
+                <div className="flex items-center justify-between mb-3 sm:mb-4">
+                  <h2 className="text-base sm:text-xl font-bold bg-gradient-to-r from-green-400 to-emerald-300 bg-clip-text text-transparent">📊 Performance Radar</h2>
+                  <button
+                    onClick={() => setIsFullscreen(true)}
+                    className="text-white/60 hover:text-white transition-colors"
+                  >
+                    <Maximize2 className="w-5 h-5 sm:w-6 sm:h-6" />
+                  </button>
+                </div>
+
+                <div className="flex flex-wrap gap-1 sm:gap-2 mb-3 sm:mb-4">
+                  <button
+                    onClick={() => setImageZoom(prev => Math.max(prev - 20, 50))}
+                    disabled={imageZoom <= 50}
+                    className="bg-green-900/50 hover:bg-green-800/60 disabled:opacity-50 disabled:cursor-not-allowed text-green-300 px-2 sm:px-4 py-1.5 sm:py-2 rounded-lg transition-colors flex items-center gap-1 sm:gap-2 border border-green-500/30 text-xs sm:text-sm"
+                  >
+                    <ZoomOut className="w-3 h-3 sm:w-4 sm:h-4" />
+                    <span className="hidden sm:inline">{t.zoomOut}</span>
+                  </button>
+                  <button
+                    onClick={() => setImageZoom(prev => Math.min(prev + 20, 200))}
+                    disabled={imageZoom >= 200}
+                    className="bg-green-900/50 hover:bg-green-800/60 disabled:opacity-50 disabled:cursor-not-allowed text-green-300 px-2 sm:px-4 py-1.5 sm:py-2 rounded-lg transition-colors flex items-center gap-1 sm:gap-2 border border-green-500/30 text-xs sm:text-sm"
+                  >
+                    <ZoomIn className="w-3 h-3 sm:w-4 sm:h-4" />
+                    <span className="hidden sm:inline">{t.zoomIn}</span>
+                  </button>
+                  <button
+                    onClick={toggleFullscreen}
+                    className="bg-green-900/50 hover:bg-green-800/60 text-green-300 px-2 sm:px-4 py-1.5 sm:py-2 rounded-lg transition-colors flex items-center gap-1 sm:gap-2 border border-green-500/30 text-xs sm:text-sm"
+                  >
+                    <Maximize2 className="w-3 h-3 sm:w-4 sm:h-4" />
+                    <span className="hidden sm:inline">{t.fullscreen}</span>
+                  </button>
+                  <span className="bg-gradient-to-r from-green-900/60 to-emerald-900/60 text-green-300 font-bold px-2 sm:px-4 py-1.5 sm:py-2 rounded-lg ml-auto border border-green-500/30 text-xs sm:text-sm">
+                    {imageZoom}%
+                  </span>
+                </div>
+
+                <div className="flex-1 bg-gradient-to-br from-black/50 to-green-950/30 rounded-xl overflow-auto relative border border-green-500/20 flex items-center justify-center p-4">
+                  <div style={{
+                    transform: `scale(${imageZoom / 100})`,
+                    transformOrigin: 'center',
+                    transition: 'transform 0.2s ease-out',
+                    width: '100%',
+                    maxWidth: '600px'
+                  }}>
+                    <PlayerRadarChart payload={radarPayload} generationKey={generationKey} />
+                  </div>
+                </div>
+              </div>
             )}
 
             {showImagePanel && (
@@ -950,7 +1004,7 @@ export default function Home() {
       </main>
 
       {/* Fullscreen Modal */}
-      {isFullscreen && currentImage && (
+      {isFullscreen && (currentImage || radarPayload) && (
         <div className="fixed inset-0 z-50 bg-black flex items-center justify-center p-4" onClick={toggleFullscreen}>
           <div
             className="w-full max-w-5xl flex flex-col bg-black border border-emerald-500/30 rounded-2xl text-white"
@@ -960,7 +1014,7 @@ export default function Home() {
             <div className="flex items-center justify-between gap-3 p-4 border-b border-emerald-500/20 bg-black">
               <h2 className="text-lg sm:text-xl font-bold text-green-200 flex items-center gap-2">
                 <span className="text-2xl">📊</span>
-                {t.matchAnalytics}
+                {radarPayload && !currentImage ? 'Performance Radar' : t.matchAnalytics}
               </h2>
               <div className="flex items-center gap-2">
                 <button
@@ -983,19 +1037,31 @@ export default function Home() {
               </div>
             </div>
 
-            {/* Image container */}
+            {/* Chart container */}
             <div className="chart-canvas flex-1 flex items-center justify-center bg-black">
               <div className="flex h-full w-full items-center justify-center overflow-auto p-4">
-                <img
-                  src={`data:image/png;base64,${currentImage}`}
-                  alt="Comparison chart"
-                  className="max-h-full max-w-full object-contain"
-                  style={{
+                {currentImage ? (
+                  <img
+                    src={`data:image/png;base64,${currentImage}`}
+                    alt="Comparison chart"
+                    className="max-h-full max-w-full object-contain"
+                    style={{
+                      transform: `scale(${imageZoom / 100})`,
+                      transformOrigin: 'center',
+                      transition: 'transform 0.2s ease-out'
+                    }}
+                  />
+                ) : radarPayload ? (
+                  <div style={{
                     transform: `scale(${imageZoom / 100})`,
                     transformOrigin: 'center',
-                    transition: 'transform 0.2s ease-out'
-                  }}
-                />
+                    transition: 'transform 0.2s ease-out',
+                    width: '100%',
+                    maxWidth: '800px'
+                  }}>
+                    <PlayerRadarChart payload={radarPayload} generationKey={generationKey} />
+                  </div>
+                ) : null}
               </div>
             </div>
 
