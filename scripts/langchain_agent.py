@@ -3764,7 +3764,7 @@ IMPORTANT: Use plain text only. Do NOT use markdown formatting like ** for bold 
                     try:
                         # Get position-specific metrics for the player
                         available_cols = get_available_columns()
-                        metrics_to_chart = choose_default_metrics_for_players(players, rag_hits or [], available_cols)
+                        metrics_to_chart = choose_default_metrics_for_players(players, hits or [], available_cols)
 
                         if metrics_to_chart and len(metrics_to_chart) >= 3:
                             dbg("Generating radar chart for single player %s with metrics: %s", players[0], metrics_to_chart)
