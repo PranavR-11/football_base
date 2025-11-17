@@ -2579,16 +2579,14 @@ def choose_chart_type(players: List[str], metrics: List[str], data_summary: Dict
     if len(players) == 1 and len(metrics) >= 1:
         return "radar"
 
-    # For multiple players
+    # For multiple players - NEVER use radar (use bar charts/time series instead)
+    # Radar charts are ONLY for single player representations to avoid conflicts
     if len(metrics) == 1:
         return "group_timeseries"
     if len(metrics) == 2:
         return "group_bar"
     if len(metrics) >= 3:
-        # Radar for 3+ players, but NOT 2-player comparisons (use comparison charts instead)
-        if len(players) != 2:
-            return "radar"
-        # For 2-player comparisons, let the comparison handler take over
+        # Use bar charts or let comparison handler take over
         return "fallback_text"
     return "fallback_text"
 
@@ -3670,8 +3668,9 @@ def handle_input(text: str):
                                 charts_created.append((metric, path))
                                 # Chart generated successfully - sent via WebSocket
 
-                # DEFAULT: Generate Chart.js radar for 1 player OR 3+ players (NOT for 2-player comparisons)
-                if len(players) != 2 and len(metrics_to_compare) >= 3 and user_requested_viz in ["auto", "radar", "both"]:
+                # DEFAULT: Generate Chart.js radar ONLY for single player (NOT for multi-player comparisons)
+                # Multi-player comparisons use bar charts instead to avoid conflicts
+                if len(players) == 1 and len(metrics_to_compare) >= 3 and user_requested_viz in ["auto", "radar", "both"]:
                     radar_path = validate_and_plot_radar(players, metrics_to_compare[:6], seasons_for_query, text)
                     if radar_path:
                         charts_created.append(("radar", radar_path))
