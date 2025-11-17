@@ -309,6 +309,7 @@ export default function Home() {
   const [generationKey, setGenerationKey] = useState(() => Date.now())
   const [scrollTargetId, setScrollTargetId] = useState<string | null>(null)
   const [radarPayload, setRadarPayload] = useState<RadarPayload | null>(null)
+  const lastRadarPlayersRef = useRef<string[]>([])
   const [language, setLanguage] = useState<Language>('en')
   const [videoStartTime, setVideoStartTime] = useState(0)
   const videoRef = useRef<HTMLVideoElement>(null)
@@ -403,7 +404,11 @@ export default function Home() {
           }
 
           if (data.type === 'radar_data') {
-            setRadarPayload(data.payload as RadarPayload)
+            const payload = data.payload as RadarPayload
+            setRadarPayload(payload)
+            if (payload?.players?.length) {
+              lastRadarPlayersRef.current = payload.players.map(p => (p || '').toLowerCase())
+            }
             return
           }
 
@@ -551,9 +556,77 @@ export default function Home() {
     // Store query in ref for comparison check
     lastQueryRef.current = query
     setGenerationKey(Date.now())
-    // Only clear radar if query looks like it's changing context (new comparison/player)
+
     const lowerQuery = query.toLowerCase()
-    if (lowerQuery.includes('compar') || lowerQuery.includes('who is') || lowerQuery.includes('vs')) {
+    const pronounRegex = /\b(he|his|him|she|her|they|them|their)\b/i
+    const hasPronounRef = pronounRegex.test(lowerQuery)
+    const statKeywords = new Set([
+      'goal', 'goals', 'assist', 'assists', 'xg', 'xag', 'npxg', 'npxga',
+      'pass', 'passes', 'progressive', 'carry', 'carries', 'shot', 'shots',
+      'tackle', 'tackles', 'dribble', 'dribbles', 'stat', 'stats', 'metric',
+      'metrics', 'season', 'seasons', 'per', 'numbers', 'chart', 'graph',
+      'data', 'latest', 'recent'
+    ])
+    const stopWords = new Set([
+      'who', 'is', 'was', 'were', 'are', 'do', 'does', 'did', 'tell', 'me', 'about', 'info', 'information',
+      'give', 'show', 'explain', 'compare', 'vs', 'versus', 'with', 'and', 'the', 'a', 'an',
+      'please', 'can', 'you', 'what', 'how', 'why', 'when', 'where', 'on', 'for', 'of', 'to',
+      'from', 'this', 'that', 'these', 'those', 'player', 'players', 'vs.', 'vs,'
+    ])
+
+    const extractTitleCaseNames = (inputStr: string): string[] => {
+      const matches = inputStr.match(/\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,2})\b/g) || []
+      return matches.map(m => m.trim())
+    }
+
+    const looksLikeNameOnly = (inputStr: string): string | null => {
+      const cleaned = inputStr.replace(/[?.!,]/g, '').trim()
+      if (!cleaned) return null
+      const words = cleaned.split(/\s+/).filter(Boolean)
+      if (words.length === 0 || words.length > 3) return null
+      const lettersOnly = /^[a-zA-Z\s.'-]+$/.test(cleaned)
+      if (!lettersOnly) return null
+      const hasStatWord = words.some(w => statKeywords.has(w.toLowerCase()))
+      if (hasStatWord) return null
+      if (words.every(w => stopWords.has(w.toLowerCase()))) return null
+      return cleaned
+    }
+
+    const extractLowercaseAfterKeyword = (inputStr: string): string | null => {
+      const m = inputStr.match(/\b(?:about|regarding|on|info on|information on)\s+([a-z][a-z\s'-]{2,})$/i)
+      if (!m) return null
+      const candidate = m[1].trim()
+      if (!candidate) return null
+      const words = candidate.split(/\s+/).filter(Boolean)
+      if (words.length === 0 || words.length > 4) return null
+      const hasStatWord = words.some(w => statKeywords.has(w.toLowerCase()))
+      if (hasStatWord) return null
+      return candidate
+    }
+
+    const lastRadarPlayers = lastRadarPlayersRef.current || []
+    const compareKeywords = lowerQuery.includes('compar') || lowerQuery.includes(' vs ') || lowerQuery.includes('versus')
+    const titleNames = extractTitleCaseNames(query)
+    let candidateNames: string[] = titleNames
+
+    if (!candidateNames.length) {
+      const keywordCandidate = extractLowercaseAfterKeyword(query)
+      if (keywordCandidate) {
+        candidateNames = [keywordCandidate]
+      } else {
+        const fallbackCandidate = looksLikeNameOnly(query)
+        if (fallbackCandidate) {
+          candidateNames = [fallbackCandidate]
+        }
+      }
+    }
+
+    const mentionsDifferentPlayer = candidateNames.some(name => {
+      const normalized = name.toLowerCase()
+      return normalized && !lastRadarPlayers.some(p => p.includes(normalized) || normalized.includes(p))
+    })
+
+    if (compareKeywords || (!hasPronounRef && mentionsDifferentPlayer)) {
       setRadarPayload(null)
     }
     // Add user message (optimistic UI update)

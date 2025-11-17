@@ -189,8 +189,9 @@ function deriveSeason(seasons: Record<string, string | null>) {
     if (/^\d{4}$/.test(season)) {
       const year = Number(season)
       if (!Number.isNaN(year)) {
-        const next = (year + 1).toString().slice(-2)
-        return `${season.slice(-2)}-${next}`
+        const start = (year - 1).toString().slice(-2)
+        const end = year.toString().slice(-2)
+        return `${start}-${end}`
       }
     }
     return season
@@ -203,8 +204,9 @@ function formatPlayerLabel(player: string, season?: string | null) {
   if (/^\d{4}$/.test(season)) {
     const year = Number(season)
     if (!Number.isNaN(year)) {
-      const next = (year + 1).toString().slice(-2)
-      return `${player} (${season.slice(-2)}-${next})`
+      const start = (year - 1).toString().slice(-2)
+      const end = year.toString().slice(-2)
+      return `${player} (${start}-${end})`
     }
   }
   return `${player} (${season})`
