@@ -2412,14 +2412,8 @@ def plot_comprehensive_comparison(
                     fontsize=22, weight='bold', y=0.98, color='white')
 
         result = safe_save_plot(fig, fname)
-        CONTEXT["latest_radar_payload"] = {
-            "metrics": metrics_for_radar,
-            "players": players,
-            "percentiles": radar_percentiles,
-            "actual_values": radar_actual_values,
-            "seasons": radar_seasons,
-            "generated_at": time.time()
-        }
+        # DON'T send Chart.js radar payload - the matplotlib image already has the radar
+        # CONTEXT["latest_radar_payload"] removed to prevent duplicate radar charts
         plt.style.use('default')  # Reset to default style
         return result
 
@@ -2450,7 +2444,10 @@ RAG SNIPPETS:
 USER QUESTION:
 {question}
 
-Provide a brief, conversational answer (2-4 sentences) about the player based on the information available. Focus on their position, team, nationality, and notable characteristics.
+Provide a brief answer (2-4 sentences) about the player. Include:
+1. Position, team, nationality, and notable playing style/characteristics
+2. Key stats from their latest/recent season if available in the snippets (e.g., goals, assists, progressive passes/carries)
+3. Keep it conversational and informative
 
 IMPORTANT: Use plain text only. Do NOT use markdown formatting like ** for bold or __ for italics. Write in clear, natural language with proper punctuation and structure.
 """
@@ -2811,6 +2808,22 @@ def calculate_radar_data(players: List[str], metrics: List[str], seasons_back: i
     players_percentiles = {p: [] for p in players}
     players_seasons = {p: None for p in players}  # Track which season each player's data is from
 
+    def _extract_season_identifier(entry: Dict[str, Any]) -> Optional[str]:
+        """Return a normalized season identifier (year or label) from MCP entries."""
+        if not isinstance(entry, dict):
+            return None
+        for key in ("season", "season_year", "season_label", "season_name"):
+            value = entry.get(key)
+            if value is None:
+                continue
+            if isinstance(value, (int, float)) and not isinstance(value, bool):
+                try:
+                    return str(int(value))
+                except Exception:
+                    return str(value)
+            return str(value)
+        return None
+
     # First, determine the last relevant season for each player
     for p in players:
         # Look back through seasons to find last one with meaningful stats
@@ -2823,7 +2836,8 @@ def calculate_radar_data(players: List[str], metrics: List[str], seasons_back: i
                     for season_data in reversed(per):
                         val = season_data.get("value")
                         if val is not None and val > 0:
-                            players_seasons[p] = season_data.get("season")
+                            season_id = _extract_season_identifier(season_data)
+                            players_seasons[p] = season_id or players_seasons[p]
                             dbg("Player %s: using season %s (last active season)", p, players_seasons[p])
                             break
                     if players_seasons[p]:
@@ -2835,7 +2849,8 @@ def calculate_radar_data(players: List[str], metrics: List[str], seasons_back: i
             if isinstance(resp, dict) and resp.get("found"):
                 per = resp.get("per_season") or []
                 if per:
-                    players_seasons[p] = per[-1].get("season")
+                    fallback_season = _extract_season_identifier(per[-1])
+                    players_seasons[p] = fallback_season
                     dbg("Player %s: using latest season %s (default)", p, players_seasons[p])
 
     for metric in metrics:
@@ -2875,12 +2890,16 @@ def calculate_radar_data(players: List[str], metrics: List[str], seasons_back: i
                 target_season = players_seasons.get(p)
                 if target_season:
                     for season_data in per:
-                        if season_data.get("season") == target_season:
+                        season_id = _extract_season_identifier(season_data)
+                        if season_id == target_season:
                             val = season_data.get("value")
                             break
                 # Fallback to latest if season not found
                 if val is None and per:
                     val = per[-1].get("value")
+                    # If we had to fallback to the most recent entry, ensure season label is set
+                    if target_season is None:
+                        players_seasons[p] = _extract_season_identifier(per[-1])
 
             if val is None:
                 latest_vals[p].append(None)
@@ -3583,7 +3602,7 @@ def handle_input(text: str):
                                 charts_created.append((metric, path))
                                 # Chart generated successfully - sent via WebSocket
 
-                # DEFAULT: Generate radar chart for single player OR 3+ players (NOT 2-player comparisons)
+                # DEFAULT: Generate Chart.js radar for 1 player OR 3+ players (NOT for 2-player comparisons)
                 if len(players) != 2 and len(metrics_to_compare) >= 3 and user_requested_viz in ["auto", "radar", "both"]:
                     radar_path = validate_and_plot_radar(players, metrics_to_compare[:6], seasons_for_query, text)
                     if radar_path:

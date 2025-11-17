@@ -551,7 +551,11 @@ export default function Home() {
     // Store query in ref for comparison check
     lastQueryRef.current = query
     setGenerationKey(Date.now())
-    setRadarPayload(null)
+    // Only clear radar if query looks like it's changing context (new comparison/player)
+    const lowerQuery = query.toLowerCase()
+    if (lowerQuery.includes('compar') || lowerQuery.includes('who is') || lowerQuery.includes('vs')) {
+      setRadarPayload(null)
+    }
     // Add user message (optimistic UI update)
     setMessages(prev => [
       ...prev,

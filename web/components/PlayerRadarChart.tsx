@@ -32,26 +32,46 @@ const radarLabelsPlugin: Plugin<'radar'> = {
   afterDatasetsDraw(chart) {
     const { ctx } = chart
     ctx.save()
-    ctx.font = 'bold 12px Inter, system-ui, sans-serif'
+    ctx.font = 'bold 11px Inter, system-ui, sans-serif'
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
+
     chart.data.datasets.forEach((dataset, datasetIndex) => {
       const meta = chart.getDatasetMeta(datasetIndex)
+      const centerX = chart.chartArea.left + (chart.chartArea.right - chart.chartArea.left) / 2
+      const centerY = chart.chartArea.top + (chart.chartArea.bottom - chart.chartArea.top) / 2
+
       meta.data.forEach((point, index) => {
         const rawValue = dataset.data[index]
         const numericValue = typeof rawValue === 'number' ? rawValue : Number(rawValue)
         if (!Number.isFinite(numericValue)) return
+
         const { x, y } = point.tooltipPosition(false) as { x: number; y: number }
+
+        // Calculate angle and distance from center to push labels outward
+        const dx = x - centerX
+        const dy = y - centerY
+        const distance = Math.sqrt(dx * dx + dy * dy)
+
+        // Push labels outward by 15-25 pixels depending on dataset index to avoid overlap
+        const pushDistance = 15 + (datasetIndex * 12)
+        const offsetX = distance > 0 ? (dx / distance) * pushDistance : 0
+        const offsetY = distance > 0 ? (dy / distance) * pushDistance : 0
+
+        const labelX = x + offsetX
+        const labelY = y + offsetY
 
         // Draw background for better visibility
         const text = `${Math.round(numericValue)}`
         const textWidth = ctx.measureText(text).width
-        ctx.fillStyle = 'rgba(0,0,0,0.7)'
-        ctx.fillRect(x - textWidth / 2 - 4, y - 14, textWidth + 8, 20)
+        const color = (dataset.borderColor as string) || '#FF6B6B'
 
-        // Draw text
-        ctx.fillStyle = '#ffffff'
-        ctx.fillText(text, x, y - 4)
+        ctx.fillStyle = 'rgba(0,0,0,0.8)'
+        ctx.fillRect(labelX - textWidth / 2 - 4, labelY - 10, textWidth + 8, 18)
+
+        // Draw text with dataset color
+        ctx.fillStyle = color
+        ctx.fillText(text, labelX, labelY)
       })
     })
     ctx.restore()
@@ -160,10 +180,22 @@ const PlayerRadarChart = ({ payload, generationKey }: Props) => {
 }
 
 function deriveSeason(seasons: Record<string, string | null>) {
-  const values = Object.values(seasons || {}).filter(Boolean)
-  if (!values.length) return 'Recent Seasons'
+  const values = Object.values(seasons || {}).filter((v): v is string => Boolean(v))
+  if (!values.length) return 'Latest Season'
   const unique = Array.from(new Set(values))
-  return unique.length === 1 ? unique[0] : 'Recent Seasons'
+  if (unique.length === 1) {
+    // Format single season as "24-25" style
+    const season = unique[0]
+    if (/^\d{4}$/.test(season)) {
+      const year = Number(season)
+      if (!Number.isNaN(year)) {
+        const next = (year + 1).toString().slice(-2)
+        return `${season.slice(-2)}-${next}`
+      }
+    }
+    return season
+  }
+  return 'Recent Seasons'
 }
 
 function formatPlayerLabel(player: string, season?: string | null) {
