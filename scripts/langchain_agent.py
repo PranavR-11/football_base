@@ -2743,7 +2743,11 @@ def interactive_slot_manager(user_text: str, intent_struct: Dict[str,Any]) -> Di
 
     # If still no players and it's not just a greeting/natural chit-chat, try safe RAG
     # BUT: Only for new questions where we expect a player (not follow-ups)
-    if not players and intent not in ("natural",) and is_new_question:
+    # ALSO: Skip if we have team/position filters - those queries don't need player resolution
+    team = intent_struct.get("team")
+    position = intent_struct.get("position")
+
+    if not players and intent not in ("natural",) and is_new_question and not (team or position):
         # Don't search for player names if query is very short or looks like a follow-up
         if len(user_text.strip()) > 4 and not re.fullmatch(r"\d{4}\??", user_text.strip()):
             canonical, ambiguous = resolve_player_name_with_rag(user_text, require_confirmation=True)
@@ -2767,6 +2771,8 @@ def interactive_slot_manager(user_text: str, intent_struct: Dict[str,Any]) -> Di
                     # Need user input
                     intent_struct["ambiguous_players"] = ambiguous
                     return intent_struct
+    elif team or position:
+        dbg("Skipping player RAG resolution - query has team/position filters: team=%s position=%s", team, position)
 
     # If player present, push context
     if players:
@@ -3257,6 +3263,14 @@ def handle_input(text: str):
         players = intent_struct.get("players") or []
         team = normalize_team_name(intent_struct.get("team"))
         position = intent_struct.get("position")
+
+        # CRITICAL FIX: If query starts with "compare" and has team/position, force intent to "compare"
+        # LLM sometimes misclassifies "compare all forwards from Barcelona" as "list"
+        if text.lower().startswith("compare") and not players and (team or position):
+            if intent != "compare":
+                dbg("Overriding LLM intent %s -> compare (query starts with 'compare' and has team/position filters)", intent)
+                intent = "compare"
+                intent_struct["intent"] = "compare"
         raw_metrics = intent_struct.get("metrics")
         seasons_back = intent_struct.get("seasons_back") or None
 
