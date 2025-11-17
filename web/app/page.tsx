@@ -573,6 +573,28 @@ export default function Home() {
       'please', 'can', 'you', 'what', 'how', 'why', 'when', 'where', 'on', 'for', 'of', 'to',
       'from', 'this', 'that', 'these', 'those', 'player', 'players', 'vs.', 'vs,'
     ])
+    const nonPlayerTokens = new Set([
+      'league', 'cup', 'club', 'team', 'final', 'world', 'champions', 'premier', 'serie', 'bundesliga',
+      'liga', 'uefa', 'fifa', 'golden', 'boot', 'nation', 'nations', 'match', 'game', 'coach',
+      'manager', 'referee', 'academy', 'youth', 'stadium', 'city', 'united', 'fc', 'cf', 'ac',
+      'real', 'barcelona', 'madrid', 'bayern', 'psg', 'arsenal', 'chelsea', 'liverpool', 'inter',
+      'milan', 'juventus'
+    ])
+
+    const isLikelyPlayerName = (name: string): boolean => {
+      if (!name) return false
+      const cleaned = name.trim()
+      if (!cleaned) return false
+      const words = cleaned.split(/\s+/).filter(Boolean)
+      if (words.length === 0 || words.length > 4) return false
+      const lettersOnly = /^[a-zA-Z\s.'-]+$/.test(cleaned)
+      if (!lettersOnly) return false
+      const meaningfulWords = words.filter(w => !stopWords.has(w.toLowerCase()))
+      if (!meaningfulWords.length) return false
+      const hasBanned = words.some(w => nonPlayerTokens.has(w.toLowerCase()))
+      if (hasBanned) return false
+      return true
+    }
 
     const extractTitleCaseNames = (inputStr: string): string[] => {
       const matches = inputStr.match(/\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,2})\b/g) || []
@@ -621,12 +643,22 @@ export default function Home() {
       }
     }
 
-    const mentionsDifferentPlayer = candidateNames.some(name => {
+    const likelyPlayerNames = candidateNames.filter(isLikelyPlayerName)
+    const matchesCurrentPlayer = likelyPlayerNames.some(name => {
       const normalized = name.toLowerCase()
-      return normalized && !lastRadarPlayers.some(p => p.includes(normalized) || normalized.includes(p))
+      return normalized && lastRadarPlayers.some(p => p.includes(normalized) || normalized.includes(p))
     })
+    const mentionsDifferentPlayer = likelyPlayerNames.length > 0 && !matchesCurrentPlayer
 
-    if (compareKeywords || (!hasPronounRef && mentionsDifferentPlayer)) {
+    const hasExplicitName = likelyPlayerNames.length > 0
+    const referencingSamePlayerByName = hasExplicitName && matchesCurrentPlayer
+    const pronounOnlyFollowUp = hasPronounRef && !hasExplicitName
+
+    if (
+      compareKeywords ||
+      mentionsDifferentPlayer ||
+      (!pronounOnlyFollowUp && !referencingSamePlayerByName && !!radarPayload)
+    ) {
       setRadarPayload(null)
     }
     // Add user message (optimistic UI update)
