@@ -2633,11 +2633,25 @@ def interactive_slot_manager(user_text: str, intent_struct: Dict[str,Any]) -> Di
 
     # If we have players, try to resolve them to canonical names via RAG
     # BUT skip if this looks like a conversational phrase misinterpreted as player names
+    # Only clear players if the query is PURELY conversational (no additional context)
     if players and is_conversational:
-        # LLM incorrectly extracted "player names" from conversational text - clear them
-        dbg("Clearing incorrectly extracted players from conversational text: %s", players)
-        intent_struct["players"] = []
-        return intent_struct
+        # Check if query is just the conversational phrase with no meaningful additions
+        # Remove the conversational phrase and see if there's substantial remaining text
+        remaining_text = text_lower
+        for phrase in conversational_phrases:
+            remaining_text = remaining_text.replace(phrase, '')
+
+        # Clean up the remaining text
+        remaining_text = remaining_text.strip().strip('?!.,').strip()
+
+        # If there's meaningful remaining text (like a player name), keep the players
+        # Only clear if query is purely conversational with no substance
+        if len(remaining_text) <= 5:  # Very short or empty after removing conversational phrase
+            dbg("Clearing incorrectly extracted players from purely conversational text: %s", players)
+            intent_struct["players"] = []
+            return intent_struct
+        else:
+            dbg("Keeping players %s despite conversational phrase - substantial context remains: '%s'", players, remaining_text)
 
     if players:
         resolved_players = []
