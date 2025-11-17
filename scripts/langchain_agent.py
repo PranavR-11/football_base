@@ -3373,7 +3373,7 @@ def handle_input(text: str):
             raw_list = [m for m in raw_metrics if isinstance(m, str)]
         metrics = [normalize_metric_token(m, available_cols) for m in raw_list]
 
-    dbg("Resolved intent=%s players=%s metrics=%s", intent, players, metrics)
+    dbg("Resolved intent=%s players=%s metrics=%s team=%s position=%s", intent, players, metrics, team, position)
 
     # IMPROVED: If user mentioned player(s) but no metric -> check intent first
     if players and not metrics:
@@ -3828,6 +3828,7 @@ IMPORTANT: Use plain text only. Do NOT use markdown formatting like ** for bold 
 
     # Handle "compare" intent with team/position but no specific players
     # This is for queries like "compare all forwards from Barcelona"
+    dbg("[TEAM/POSITION CHECK] intent=%s, len(players)=%d, team=%s, position=%s", intent, len(players), team, position)
     if intent == "compare" and not players and (team or position):
         dbg("Handling group comparison: team=%s position=%s", team, position)
 
