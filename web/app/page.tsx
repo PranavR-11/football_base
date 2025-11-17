@@ -421,6 +421,9 @@ export default function Home() {
           if (data.type === 'radar_data') {
             const payload = data.payload as RadarPayload
             setRadarPayload(payload)
+            // Clear any existing comparison image when radar arrives
+            setCurrentImage(null)
+            setImageLoading(false)
             if (payload?.players?.length) {
               lastRadarPlayersRef.current = payload.players.map(p => (p || '').toLowerCase())
             }
@@ -462,6 +465,8 @@ export default function Home() {
             }
             setImageLoading(false)
             setCurrentImage(data.data)
+            // Clear any existing radar chart when comparison image arrives
+            setRadarPayload(null)
             setMessages(prev => [
               ...prev,
               {
@@ -675,6 +680,8 @@ export default function Home() {
       (!pronounOnlyFollowUp && !referencingSamePlayerByName && !!radarPayload)
     ) {
       setRadarPayload(null)
+      setCurrentImage(null)
+      setImageLoading(false)
     }
     // Add user message (optimistic UI update)
     setMessages(prev => [
