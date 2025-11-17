@@ -36,9 +36,14 @@ const convertAllCapsToHeaders = (text: string) => {
     }
 
     // Pattern 3: Numbered headings (e.g., "1. Career Overview", "2. Playing Style")
+    // BUT: Skip if this looks like a disambiguation list (all caps names)
     const numberedMatch = trimmed.match(/^(\d+)\.\s+(.+)$/)
     if (numberedMatch && numberedMatch[2].length >= 3 && numberedMatch[2].length <= 50) {
-      return `## ${numberedMatch[2].toUpperCase()}`
+      // Don't convert if the text is already ALL CAPS (likely a player name in a list)
+      const isAllCaps = /^[A-Z0-9\s\-']+$/.test(numberedMatch[2])
+      if (!isAllCaps) {
+        return `## ${numberedMatch[2].toUpperCase()}`
+      }
     }
 
     // Pattern 4: Bold headings at start of line (e.g., "**Career Overview**")
