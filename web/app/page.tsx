@@ -420,12 +420,23 @@ export default function Home() {
 
           if (data.type === 'radar_data') {
             const payload = data.payload as RadarPayload
+
+            // Check if this is a new player context (different from current radar)
+            const newPlayers = payload?.players?.map(p => (p || '').toLowerCase()) || []
+            const currentPlayers = lastRadarPlayersRef.current || []
+            const isDifferentPlayerContext = newPlayers.length > 0 &&
+              !newPlayers.every(np => currentPlayers.some(cp => cp.includes(np) || np.includes(cp)))
+
             setRadarPayload(payload)
-            // Clear any existing comparison image when radar arrives
-            setCurrentImage(null)
-            setImageLoading(false)
+
+            // Only clear comparison image if this is a genuinely different player context
+            if (isDifferentPlayerContext) {
+              setCurrentImage(null)
+              setImageLoading(false)
+            }
+
             if (payload?.players?.length) {
-              lastRadarPlayersRef.current = payload.players.map(p => (p || '').toLowerCase())
+              lastRadarPlayersRef.current = newPlayers
             }
             return
           }
@@ -465,8 +476,6 @@ export default function Home() {
             }
             setImageLoading(false)
             setCurrentImage(data.data)
-            // Clear any existing radar chart when comparison image arrives
-            setRadarPayload(null)
             setMessages(prev => [
               ...prev,
               {
@@ -674,11 +683,14 @@ export default function Home() {
     const referencingSamePlayerByName = hasExplicitName && matchesCurrentPlayer
     const pronounOnlyFollowUp = hasPronounRef && !hasExplicitName
 
-    if (
+    // Only clear charts when switching to a genuinely different context
+    // Keep charts for pronoun follow-ups or when referencing the same player
+    const shouldClearCharts =
       compareKeywords ||
       mentionsDifferentPlayer ||
-      (!pronounOnlyFollowUp && !referencingSamePlayerByName && !!radarPayload)
-    ) {
+      (!pronounOnlyFollowUp && !referencingSamePlayerByName && (!!radarPayload || !!currentImage))
+
+    if (shouldClearCharts) {
       setRadarPayload(null)
       setCurrentImage(null)
       setImageLoading(false)
