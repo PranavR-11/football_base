@@ -315,6 +315,7 @@ export default function Home() {
   const videoRef = useRef<HTMLVideoElement>(null)
   const wsRef = useRef<WebSocket | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const messagesContainerRef = useRef<HTMLDivElement | null>(null)
   const currentMessageIdRef = useRef<string | null>(null)
   const accumulatedTextRef = useRef<string>('')
   const lastQueryRef = useRef<string>('')
@@ -363,8 +364,22 @@ export default function Home() {
   }
 
   useEffect(() => {
-    scrollToBottom()
+    if (!messages.length) return
+    const lastMessage = messages[messages.length - 1]
+    if (lastMessage.type === 'user') {
+      scrollToBottom()
+    }
   }, [messages])
+
+  useEffect(() => {
+    if (!scrollTargetId) return
+    const targetEl = typeof document !== 'undefined'
+      ? document.getElementById(`msg-${scrollTargetId}`)
+      : null
+    if (targetEl) {
+      targetEl.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }
+  }, [scrollTargetId])
 
   useEffect(() => {
     const connectWebSocket = () => {
@@ -808,11 +823,14 @@ export default function Home() {
       <main className="max-w-full mx-auto px-2 sm:px-4 py-4 sm:py-8 flex flex-col lg:flex-row gap-4 relative z-10 h-[calc(100vh-80px)] sm:h-[calc(100vh-100px)] lg:h-[calc(100vh-140px)]">
         {/* Chat Container - Always full width on mobile, split on desktop when image present */}
         <div
-          className={`bg-gradient-to-br from-gray-900/40 via-green-950/50 to-gray-900/40 backdrop-blur-xl rounded-2xl sm:rounded-3xl shadow-2xl border-2 border-green-400/40 overflow-hidden transition-all duration-500 flex flex-col ${chatWidthClass}`}
+          className={`bg-gradient-to-br from-gray-900/40 via-green-950/50 to-gray-900/40 backdrop-blur-xl rounded-2xl sm:rounded-3xl shadow-2xl border-2 border-green-400/40 overflow-hidden transition-all duration-500 flex flex-col h-full min-h-0 ${chatWidthClass}`}
           style={{ backdropFilter: 'blur(20px) saturate(180%)' }}
         >
           {/* Messages */}
-          <div className="flex-1 overflow-y-auto p-3 sm:p-6 space-y-4 bg-gradient-to-b from-black/20 to-transparent relative">
+          <div
+            ref={messagesContainerRef}
+            className="flex-1 overflow-y-auto p-3 sm:p-6 space-y-4 bg-gradient-to-b from-black/20 to-transparent relative min-h-0"
+          >
             {messages.length === 0 && (
               <div className="text-center text-white/70 mt-8 sm:mt-16 lg:mt-32 relative z-10">
                 <div className="text-4xl sm:text-6xl mb-4 sm:mb-6 animate-bounce">⚽</div>
@@ -878,6 +896,7 @@ export default function Home() {
                   className={`flex ${msg.type === 'user' ? 'justify-end' : 'justify-start'}`}
                 >
                   <div
+                    id={`msg-${msg.id}`}
                     className={`${
                       msg.type === 'user' ? 'max-w-[85%] sm:max-w-lg' : 'max-w-[95%] sm:max-w-4xl'
                     } px-3 sm:px-4 py-2 sm:py-3 rounded-lg sm:rounded-xl shadow-lg ${
@@ -959,10 +978,10 @@ export default function Home() {
         )}
 
         {showSideColumn && (
-          <div className="hidden lg:flex w-full lg:w-1/2 flex-col gap-4">
+          <div className="hidden lg:flex w-full lg:w-1/2 flex-col gap-4 h-full min-h-0">
             {showRadarCard && radarPayload && (
               <div
-                className="bg-gradient-to-br from-gray-900/40 via-green-950/50 to-gray-900/40 backdrop-blur-xl rounded-2xl sm:rounded-3xl shadow-2xl border-2 border-green-400/40 p-3 sm:p-6 flex flex-col h-full"
+                className="bg-gradient-to-br from-gray-900/40 via-green-950/50 to-gray-900/40 backdrop-blur-xl rounded-2xl sm:rounded-3xl shadow-2xl border-2 border-green-400/40 p-3 sm:p-6 flex flex-col flex-1 min-h-0"
                 style={{ backdropFilter: 'blur(20px) saturate(180%)' }}
               >
                 <div className="flex items-center justify-between mb-3 sm:mb-4">
@@ -1020,7 +1039,7 @@ export default function Home() {
 
             {showImagePanel && (
               <div
-                className="bg-gradient-to-br from-gray-900/40 via-green-950/50 to-gray-900/40 backdrop-blur-xl rounded-2xl sm:rounded-3xl shadow-2xl border-2 border-green-400/40 p-3 sm:p-6 flex-col"
+                className="bg-gradient-to-br from-gray-900/40 via-green-950/50 to-gray-900/40 backdrop-blur-xl rounded-2xl sm:rounded-3xl shadow-2xl border-2 border-green-400/40 p-3 sm:p-6 flex flex-col flex-1 min-h-0"
                 style={{ backdropFilter: 'blur(20px) saturate(180%)' }}
               >
                 <div className="flex items-center justify-between mb-3 sm:mb-4">
