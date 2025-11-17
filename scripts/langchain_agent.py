@@ -788,14 +788,42 @@ METRIC_ALIASES = {
     "full match equivalents": "playing_time_90s",
     "90 equivalents": "playing_time_90s",
 
-    # goals & assists
+    # goals & assists (multi-language support)
     "goals": "goals",
     "goal": "goals",
     "g": "goals",
+    # French
+    "buts": "goals",
+    "but": "goals",
+    # Spanish
+    "goles": "goals",
+    "gol": "goals",
+    # Portuguese
+    "gols": "goals",
+    # German
+    "tore": "goals",
+    "tor": "goals",
+    # Italian
+    "gol": "goals",
+    "reti": "goals",
 
     "assists": "assists",
     "assist": "assists",
     "a": "assists",
+    # French
+    "passes décisives": "assists",
+    "passe décisive": "assists",
+    "passes decisives": "assists",
+    "passe decisive": "assists",
+    # Spanish
+    "asistencias": "assists",
+    "asistencia": "assists",
+    # Portuguese
+    "assistências": "assists",
+    "assistencia": "assists",
+    # German
+    "vorlagen": "assists",
+    "vorlage": "assists",
 
     "goal contributions": "goals_assists",
     "goals and assists": "goals_assists",
