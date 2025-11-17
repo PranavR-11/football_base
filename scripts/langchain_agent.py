@@ -2462,11 +2462,11 @@ def llm_fallback_answer(question: str, rag_ctx: str, rag_hits: List[Dict[str,Any
         if is_biographical:
             user_language = CONTEXT.get("detected_language", "English")
             prompt = f"""
-You are a knowledgeable football analyst. The user is asking a general question about a player. Use the RAG snippets below to provide a concise, informative answer.
+You are a knowledgeable football analyst. The user is asking a general question about a player. Use the player information below to provide a concise, informative answer.
 
 IMPORTANT: Respond in {user_language}.
 
-RAG SNIPPETS:
+PLAYER INFORMATION:
 {rag_ctx}
 
 USER QUESTION:
@@ -2474,7 +2474,7 @@ USER QUESTION:
 
 Provide a brief answer (2-4 sentences) about the player. Include:
 1. Position, team, nationality, and notable playing style/characteristics
-2. Key stats from their latest/recent season if available in the snippets (e.g., goals, assists, progressive passes/carries)
+2. Key stats from their latest/recent season if available in the information (e.g., goals, assists, progressive passes/carries)
 3. Keep it conversational and informative
 
 IMPORTANT: Use plain text only. Do NOT use markdown formatting like ** for bold or __ for italics. Write in clear, natural language with proper punctuation and structure.
@@ -2482,19 +2482,19 @@ IMPORTANT: Use plain text only. Do NOT use markdown formatting like ** for bold 
         else:
             user_language = CONTEXT.get("detected_language", "English")
             prompt = f"""
-You are a knowledgeable football analyst. Use the RAG snippets below. If exact numeric values are not present in the snippets, attempt an informed answer labeled clearly as ESTIMATE or BEST_EFFORT. If you use a proxy column (e.g. 'progressive_passes' for 'passes'), say so.
+You are a knowledgeable football analyst. Use the player statistics and information below. If exact numeric values are not present, attempt an informed answer labeled clearly as ESTIMATE or BEST_EFFORT. If you use a related statistic (e.g. 'progressive_passes' for 'passes'), say so.
 
 IMPORTANT: Respond in {user_language}.
 
 {schema_line}
 
-RAG SNIPPETS:
+PLAYER STATISTICS:
 {rag_ctx}
 
 USER QUESTION:
 {question}
 
-Answer briefly and factually. If specific numeric data is not available in the snippets, provide a general knowledge answer based on what you know about football, clearly indicating when you're providing general information vs. specific data from the snippets.
+Answer briefly and factually. If specific numeric data is not available in the statistics provided, provide a general knowledge answer based on what you know about football, clearly indicating when you're providing general information vs. specific data.
 
 IMPORTANT: Use plain text only. Do NOT use markdown formatting like ** for bold or __ for italics. Write in clear, natural language with proper punctuation and structure.
 """
@@ -2512,13 +2512,13 @@ def answer_with_context(question, rag_ctx, rag_hits):
 
     user_language = CONTEXT.get("detected_language", "English")
     prompt = f"""
-You are a helpful football assistant. Use the RAG snippets below when available. If the snippets don't contain the specific data requested, provide a general knowledge answer about football, clearly distinguishing between data-backed facts and general knowledge.
+You are a helpful football assistant. Use the player information below when available. If the information doesn't contain the specific data requested, provide a general knowledge answer about football, clearly distinguishing between data-backed facts and general knowledge.
 
 IMPORTANT: Respond in {user_language}.
 
 For multi-part questions, answer each part separately and clearly.
 
-RAG SNIPPETS:
+PLAYER INFORMATION:
 {rag_ctx}
 
 USER QUESTION:
@@ -2685,8 +2685,21 @@ def interactive_slot_manager(user_text: str, intent_struct: Dict[str,Any]) -> Di
         resolved_players = []
         needs_disambiguation = []
 
-        # List of pronouns that should NEVER go through RAG resolution
-        pronouns = {"him", "his", "he", "she", "her", "they", "them", "their", "herself", "himself", "themselves"}
+        # List of pronouns that should NEVER go through RAG resolution (multi-language)
+        pronouns = {
+            # English
+            "him", "his", "he", "she", "her", "they", "them", "their", "herself", "himself", "themselves",
+            # French
+            "il", "elle", "lui", "eux", "elles", "leur", "leurs", "son", "sa", "ses",
+            # Spanish
+            "él", "ella", "ellos", "ellas", "lo", "la", "los", "las", "su", "sus",
+            # Portuguese
+            "ele", "ela", "eles", "elas", "o", "a", "os", "as", "seu", "sua",
+            # German
+            "er", "sie", "ihr", "ihm", "ihn", "sein", "seine",
+            # Italian
+            "lui", "lei", "loro", "il", "la", "i", "le", "suo", "sua"
+        }
 
         for player_name in players:
             player_lower = player_name.strip().lower()
@@ -2696,12 +2709,11 @@ def interactive_slot_manager(user_text: str, intent_struct: Dict[str,Any]) -> Di
                 dbg("Slot manager skipping year-like token: %s", player_name)
                 continue
 
-            # CRITICAL: Skip RAG resolution if this is still a pronoun
-            # This means pronoun resolution failed (no context available)
+            # CRITICAL: Filter out pronouns completely - they should never be treated as player names
+            # This prevents multi-language pronouns like French "il" from going through RAG
             if player_lower in pronouns:
-                dbg("Slot manager: pronoun '%s' not resolved (no context) - skipping RAG", player_name)
-                resolved_players.append(player_name)  # Keep as-is, will error later with helpful message
-                continue
+                dbg("Slot manager: filtering out pronoun '%s' from player list (multi-language support)", player_name)
+                continue  # Skip entirely, don't add to resolved_players
 
             canonical, ambiguous = resolve_player_name_with_rag(player_name, require_confirmation=True)
             
