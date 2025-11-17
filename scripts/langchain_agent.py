@@ -993,9 +993,9 @@ def push_context(player_names: List[str], intent: str, hits: Optional[List[Dict[
     dbg("Context updated: last_players=%s last_intent=%s", CONTEXT["last_players"][:3], CONTEXT["last_intent"])
 
 def resolve_pronouns_or_last_player(text: str) -> Optional[str]:
-    """If user used 'him/her/they' or 'his/her', resolve to last player in context."""
+    """If user used 'him/her/they' or 'his/her/their', resolve to last player in context."""
     t = (text or "").lower()
-    if re.search(r"\b(him|his|he|she|her|they|them)\b", t):
+    if re.search(r"\b(him|his|he|she|her|they|them|their)\b", t):
         if CONTEXT["last_players"]:
             dbg("Resolved pronoun to last player %s", CONTEXT["last_players"][0])
             return CONTEXT["last_players"][0]
@@ -1012,7 +1012,7 @@ def resolve_pronouns_in_player_list(players: List[str], query_text: str = "") ->
         return players
 
     resolved = []
-    pronouns = {"him", "his", "he", "she", "her", "they", "them", "herself", "himself", "themselves"}
+    pronouns = {"him", "his", "he", "she", "her", "they", "them", "their", "herself", "himself", "themselves"}
 
     # Check if this looks like a new question (not a follow-up)
     # If user is asking about a new topic, don't resolve pronouns
@@ -2658,7 +2658,7 @@ def interactive_slot_manager(user_text: str, intent_struct: Dict[str,Any]) -> Di
         needs_disambiguation = []
 
         # List of pronouns that should NEVER go through RAG resolution
-        pronouns = {"him", "his", "he", "she", "her", "they", "them", "herself", "himself", "themselves"}
+        pronouns = {"him", "his", "he", "she", "her", "they", "them", "their", "herself", "himself", "themselves"}
 
         for player_name in players:
             player_lower = player_name.strip().lower()
