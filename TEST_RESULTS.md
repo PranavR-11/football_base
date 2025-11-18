@@ -135,6 +135,26 @@
 
 ---
 
+### Fix #4: 3+ Player Comparison Charts
+**Files changed:** `scripts/langchain_agent.py` (lines 3679-3700)
+**Commit:** `3fc466d`
+
+**Problem:**
+- Multi-player comparisons (3+) automatically showing time series with hardcoded ["goals", "assists"]
+- Midfielders (Pedri, Gavi, Frenkie) showing "Goals Over Time" - inappropriate metric
+- Forwards showing only "Assists Over Time" instead of both goals and assists
+- Bar charts are better for comparing multiple players
+
+**Solution:**
+1. Restrict automatic time series to single players only (when radar chart fails)
+2. For 3+ players with viz="auto", rely on bar chart generation instead
+3. Only show time series if explicitly requested (viz="time_series" or "both")
+4. When explicitly requested, use position-appropriate metrics from choose_default_metrics_for_players()
+
+**Result:** ✅ Multi-player comparisons now show bar charts by default, time series only on request
+
+---
+
 ## 📊 TEST COVERAGE
 
 | Category | Status | Notes |
@@ -174,12 +194,16 @@
 - Commit: `15e3bf1` - Add debug logging
 - Commit: `a3ce111` - Add multi-language metric support
 - Commit: `04ea4b7` - **CRITICAL FIX**: Multi-language pronouns + remove RAG mentions
+- Commit: `8cf299a` - Remove radar charts from multi-player comparisons
+- Commit: `df64e42` - Fix radar chart generation logic
+- Commit: `e2cc49e` - Add Plausible analytics to frontend
+- Commit: `3fc466d` - **NEW**: Fix 3+ player comparisons to use bar charts instead of time series
 
-**Frontend:** No changes needed
+**Frontend:** Plausible analytics added (commit `e2cc49e`)
 
 **Server:** User needs to pull latest changes and restart API container
 
-**IMPORTANT:** The latest commit (`04ea4b7`) fixes critical multi-language issues that were causing incorrect player resolution and unprofessional responses mentioning "RAG". This should be deployed immediately.
+**IMPORTANT:** The latest commit (`3fc466d`) fixes the issue where multi-player comparisons were showing inappropriate time series charts with hardcoded metrics. Bar charts are now the default for 3+ players.
 
 ---
 
