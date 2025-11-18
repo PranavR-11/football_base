@@ -3676,10 +3676,22 @@ def handle_input(text: str):
                         charts_created.append(("radar", radar_path))
                         # Chart generated successfully - sent via WebSocket
 
-                # Only show time series if radar wasn't created OR user specifically wanted both
-                if user_requested_viz == "auto" and not any(chart_type == "radar" for chart_type, _ in charts_created):
-                    # Fallback to time series if radar failed
+                # Only show time series for single players when radar wasn't created
+                # OR when user explicitly requested time series
+                # Multi-player comparisons should use bar charts by default
+                if len(players) == 1 and user_requested_viz == "auto" and not any(chart_type == "radar" for chart_type, _ in charts_created):
+                    # Fallback to time series for single player if radar failed
                     for metric in ["goals", "assists"][:2]:
+                        norm_metric = normalize_metric_token(metric, available_cols)
+                        if norm_metric:
+                            path = validate_and_plot_players_timeseries(players, norm_metric, seasons_for_query, text)
+                            if path:
+                                charts_created.append((metric, path))
+                                # Chart generated successfully - sent via WebSocket
+                elif user_requested_viz in ["time_series", "both"]:
+                    # User explicitly requested time series - use position-appropriate metrics
+                    default_metrics = choose_default_metrics_for_players(players, available_cols)
+                    for metric in default_metrics[:2]:
                         norm_metric = normalize_metric_token(metric, available_cols)
                         if norm_metric:
                             path = validate_and_plot_players_timeseries(players, norm_metric, seasons_for_query, text)
