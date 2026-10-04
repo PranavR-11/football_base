@@ -7,3 +7,5 @@ How it works. The frontend is Next.js and React with Chart.js for lightweight cl
 What it delivers. Concise, cited answers with inline sources, on demand charts, and PNG export. Automatic language detection enables localized answers across the top ten languages. The combination of semantic retrieval, toolified data calls, and LLM reasoning produces auditable, production ready responses.
 
 Real world value. For research teams this means instant cited charts for investor decks. For support teams this means knowledge base assisted replies with confidence scores. For retail and CPG this means promo lift estimates and SKU recommendations. For IoT and manufacturing this means anomaly explanation plus ranked inspection checklists that speed repairs. For regulated industries this means turning long policy documents into prioritized product tasks and compliance checklists.
+
+<img width="689" height="553" alt="image" src="https://github.com/user-attachments/assets/73e20a97-f621-49e3-9605-19357ba89b92" />
